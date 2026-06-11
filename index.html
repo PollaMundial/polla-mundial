@@ -1695,9 +1695,12 @@ function renderMyPicks(){
           <div class="pick-teams">${m.hf} ${m.home} ${r.h}–${r.a} ${m.away} ${m.af}</div>
           <div class="pick-date" style="margin-top:3px">
             Tu pick: <strong style="color:${myExactOk?"var(--gd)":myWinOk?"var(--gd)":"var(--t2)"}">${myScore}</strong>
-            · <span style="color:${myQOk?"var(--gd)":"var(--t2)"}">${myExtra}</span>
           </div>
-          <div class="pick-date" style="color:var(--t3)">Resp correcta: ${r.qr||"—"}</div>
+          <div class="pick-date" style="margin-top:2px;color:var(--t3)">${m.q}</div>
+          <div class="pick-date" style="margin-top:2px">
+            Tu resp: <span style="color:${myQOk?"var(--gd)":"var(--t2);font-weight:500"}">${myExtra}</span>
+            · Correcta: <span style="color:var(--gd);font-weight:600">${r.qr||"pendiente"}</span>
+          </div>
         </div>
         <div class="pick-pts ${ptsCls}">+${myPts}pts</div>
       </div>
