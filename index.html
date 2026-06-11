@@ -1965,9 +1965,37 @@ function buildAdmin(){
   const members=pollaLive.members||{};
   const ml=document.getElementById("members-list");
   const results=pollaLive.results||{};
-  const totalPlayable=MATCHES.filter(m=>!results[m.id]?.locked).length;
+  // Today's open matches (not locked, not live, kickoff not passed)
+  const now = Date.now();
+  const todayMatches = MATCHES.filter(m=>{
+    if(results[m.id]?.locked || results[m.id]?.live) return false;
+    const ko = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
+    // Match is "today" if kickoff is within next 12h or past 3h
+    return ko - now < 12*60*60*1000 && now - ko < 3*60*60*1000;
+  });
+  const todayLabel = todayMatches.length
+    ? `Hoy: ${todayMatches.map(m=>m.hf+m.home.split(" ")[0]+" vs "+m.af+m.away.split(" ")[0]).join(", ")}`
+    : "Sin partidos hoy";
   if(ml) ml.innerHTML=Object.entries(members).map(([uid,m])=>{
-    const picksCount=Object.keys(m.picks||{}).length;
+    // Check if member has picks for ALL of today's matches
+    const todayPicks = todayMatches.map(tm=>{
+      const p = m.picks?.[tm.id];
+      return p && (p.h>0||p.a>0||p.extra) ? 'done' : 'pending';
+    });
+    const allDone = todayMatches.length > 0 && todayPicks.every(s=>s==='done');
+    const noneDone = todayPicks.every(s=>s==='pending');
+    const partialDone = !allDone && !noneDone;
+    const doneCount = todayPicks.filter(s=>s==='done').length;
+    let todayTag;
+    if(todayMatches.length===0){
+      todayTag=`<span style="font-size:10px;background:var(--bg);color:var(--t3);border-radius:4px;padding:1px 6px;font-weight:700">Sin partidos</span>`;
+    } else if(allDone){
+      todayTag=`<span style="font-size:10px;background:var(--gl);color:var(--gd);border-radius:4px;padding:1px 6px;font-weight:700">✅ Listo</span>`;
+    } else if(partialDone){
+      todayTag=`<span style="font-size:10px;background:var(--al);color:var(--ad);border-radius:4px;padding:1px 6px;font-weight:700">⚠️ ${doneCount}/${todayMatches.length}</span>`;
+    } else {
+      todayTag=`<span style="font-size:10px;background:var(--rl);color:var(--rd);border-radius:4px;padding:1px 6px;font-weight:700">❌ Falta</span>`;
+    }
     const hasGlobals=!!(m.globals?.campeon&&m.globals?.goleador);
     const globalsTag=hasGlobals
       ?`<span style="font-size:10px;background:var(--gl);color:var(--gd);border-radius:4px;padding:1px 6px;font-weight:700">🌍 OK</span>`
@@ -1975,7 +2003,7 @@ function buildAdmin(){
     return`<div class="mem-row">
       <div class="mem-name">${m.dname||"?"} ${uid===CUR.uid?"(tú)":""} ${uid===pollaLive.owner?"👑":""}</div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span style="font-size:11px;color:var(--t3);font-weight:600">${picksCount} pronost.</span>
+        ${todayTag}
         ${globalsTag}
         <span style="font-size:12px;color:var(--t3);font-family:'Barlow Condensed',sans-serif;font-weight:700">${m.pts||0}pts</span>
         ${uid!==CUR.uid?`<button class="mem-del" onclick="delMember('${uid}','${m.dname||"?"}')">Eliminar</button>`:""}
@@ -2162,17 +2190,22 @@ async function fetchLive(){
     const res=await fetch(`${API_BASE}/fixtures?live=all&league=1&season=2026`,{headers:{"x-apisports-key":API_KEY}});
     if(!res.ok){
       setApiBadge(false, `HTTP ${res.status}`);
+      console.warn("[API] fetchLive HTTP error:", res.status);
       return;
     }
     const data=await res.json();
     if(data.errors && Object.keys(data.errors).length){
       setApiBadge(false, JSON.stringify(data.errors));
+      console.warn("[API] fetchLive errors:", data.errors);
       return;
     }
-    const remaining = data.response?.length !== undefined ? data.requests?.remaining : null;
-    setApiBadge(true, `${data.response?.length||0} partidos en vivo${remaining!=null?' · '+remaining+' req restantes':''}`);
-    if(!data.response?.length){
-      // No live matches — also check today's finished matches we might have missed
+    const liveCount = data.response?.length||0;
+    const reqsUsed = data.requests?.current||0;
+    const reqsLimit = data.requests?.limit_day||100;
+    setApiBadge(true, `${liveCount} en vivo · ${reqsUsed}/${reqsLimit} req`);
+    console.log(`[API] fetchLive OK: ${liveCount} live matches, ${reqsUsed}/${reqsLimit} requests used`);
+    if(!liveCount){
+      // No live matches — check today's finished matches we might have missed
       fetchTodayFinished();
       return;
     }
