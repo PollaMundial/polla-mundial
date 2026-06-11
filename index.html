@@ -778,7 +778,10 @@ const TOP_SCORERS = [
   "Vinicius Jr. 🇧🇷","Bukayo Saka 🏴󠁧󠁢󠁥󠁮󠁧󠁿","Raphinha 🇧🇷","Neymar Jr. 🇧🇷","Michael Olise 🇫🇷",
   "Cody Gakpo 🇳🇱","Heung-min Son 🇰🇷","Darwin Núñez 🇺🇾","Memphis Depay 🇳🇱","Romelu Lukaku 🇧🇪",
   "Richarlison 🇧🇷","Federico Valverde 🇺🇾","Luis Díaz 🇨🇴","Endrick 🇧🇷","Ferran Torres 🇪🇸",
-  "Mikel Merino 🇪🇸","Jeremy Doku 🇧🇪"
+  "Mikel Merino 🇪🇸","Jeremy Doku 🇧🇪",
+  "Raúl Jiménez 🇲🇽","Julián Quiñones 🇲🇽","Santiago Giménez 🇲🇽","Hirving Lozano 🇲🇽","Alexis Vega 🇲🇽",
+  "Kaoru Mitoma 🇯🇵","Duván Zapata 🇨🇴","Álvaro Morata 🇪🇸","Robert Lewandowski 🇵🇱","Jamal Musiala 🇩🇪",
+  "Pedri 🇪🇸","Florian Wirtz 🇩🇪","Rodri 🇪🇸","Antoine Griezmann 🇫🇷","Marcus Rashford 🏴󠁧󠁢󠁥󠁮󠁧󠁿"
 ];
 const GROUPS = {
   A:{teams:[{n:"México",f:"🇲🇽"},{n:"Sudáfrica",f:"🇿🇦"},{n:"Corea del Sur",f:"🇰🇷"},{n:"Rep. Checa",f:"🇨🇿"}]},
@@ -1918,9 +1921,37 @@ function buildCruces(){
     }).join("")}</div>`).join("");
 }
 function buildScorers(){
-  const sc=pollaLive.scorers||{};
-  const list=TOP_SCORERS.slice(0,15).map(s=>({name:s,goals:sc[s.replace(/\s/g,"_")]||0})).sort((a,b)=>b.goals-a.goals);
-  document.getElementById("ms-goleadores").innerHTML=`<div class="card"><div class="rtitle" style="margin-bottom:10px">Tabla de goleadores — actualizada automáticamente</div>${list.map((s,i)=>`<div class="scorer-row"><div class="scorer-rank${i<3?" top":""}">${i+1}</div><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--t1)">${s.name}</div></div><div class="scorer-goals">${s.goals}</div></div>`).join("")}</div>`;
+  // Use live API list if available, otherwise fall back to TOP_SCORERS
+  const liveList = pollaLive.scorerList;
+  const el = document.getElementById("ms-goleadores");
+  if(!el) return;
+  if(liveList && liveList.length){
+    // Show directly from API — any player who scored appears here
+    el.innerHTML=`<div class="card">
+      <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores — actualizada automáticamente</div>
+      ${liveList.filter(s=>s.g>0).map((s,i)=>`
+        <div class="scorer-row">
+          <div class="scorer-rank${i<3?" top":""}">${i+1}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:var(--t1)">${s.n}</div>
+            <div style="font-size:11px;color:var(--t3)">${s.t}</div>
+          </div>
+          <div class="scorer-goals">${s.g}</div>
+        </div>`).join("")}
+      ${liveList.every(s=>s.g===0)?'<div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">Aún no hay goles en el torneo</div>':''}
+    </div>`;
+  } else {
+    // Fallback: show TOP_SCORERS list with 0 goals until API syncs
+    el.innerHTML=`<div class="card">
+      <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores — pendiente de sincronización</div>
+      ${TOP_SCORERS.slice(0,15).map((s,i)=>`
+        <div class="scorer-row">
+          <div class="scorer-rank">${i+1}</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--t1)">${s}</div></div>
+          <div class="scorer-goals">0</div>
+        </div>`).join("")}
+    </div>`;
+  }
 }
 
 // ── ADMIN ──
@@ -2486,11 +2517,13 @@ async function fetchScorers(){
     if(!res.ok) return;
     const data=await res.json();
     if(!data.response?.length) return;
-    const updates={};
-    data.response.slice(0,20).forEach(item=>{
-      updates[`pollas/${CUR.pollaId}/scorers/${item.player.name.replace(/\s/g,"_")}`]=item.statistics[0]?.goals?.total||0;
-    });
-    if(Object.keys(updates).length) await update(ref(db,"/"),updates);
+    // Store the full live list directly — no hardcoded names needed
+    const scorerList = data.response.slice(0,30).map(item=>({
+      n: item.player.name,
+      t: item.statistics[0]?.team?.name||"",
+      g: item.statistics[0]?.goals?.total||0
+    }));
+    await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
   }catch(e){}
 }
 // ── AUTO BRACKET: update team names in knockout rounds from API ──
