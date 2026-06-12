@@ -2283,26 +2283,7 @@ function setApiBadge(ok, detail){
 }
 
 // Fetch today's matches that may have finished but weren't caught live
-async function fetchTodayFinished(){
-  try{
-    const today = new Date().toISOString().split('T')[0];
-    const res=await fetch(`${API_BASE_FD}/competitions/WC/matches?dateFrom=${today}&dateTo=${today}&status=FINISHED`,{headers:FD_HEADERS});
-    if(!res.ok) return;
-    const data=await res.json();
-    if(!data.response?.length) return;
-    for(const fix of data.response){
-      const mid=matchFixture(fix); if(!mid) continue;
-      const cur=pollaLive.results?.[mid];
-      if(cur?.locked) continue; // already processed
-      await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
-        h:fix.goals.home||0, a:fix.goals.away||0,
-        live:false, locked:true,
-        homeTeam:fix.teams.home.name, awayTeam:fix.teams.away.name,
-      });
-      try{ await processMatchResult(fix,mid); }catch(e){}
-    }
-  }catch(e){ console.log("fetchTodayFinished err:",e.message); }
-}
+
 
 window.testApiConnection = async function(btn){
   btn.textContent='⏳ Verificando...'; btn.disabled=true;
@@ -2575,22 +2556,6 @@ function normalizeTeam(s){
     .replace(/[^a-z0-9 ]/g,"")
     .replace(/(republic|rep|democratic|dem|korea|south|north|ivory|coast|new|zealand|saudi|arabia|cape|verde|united|states|arab|emirates)/g,"")
     .replace(/\s+/g," ").trim();
-}
-function matchFixture(fix){
-  const ah = normalizeTeam(fix.teams.home.name);
-  const aa = normalizeTeam(fix.teams.away.name);
-  const found = MATCHES.find(m => {
-    const mh = normalizeTeam(m.home);
-    const ma = normalizeTeam(m.away);
-    // Match if normalized names share at least one meaningful word
-    const shareWord = (a,b) => {
-      const wa = a.split(" ").filter(w=>w.length>2);
-      const wb = b.split(" ").filter(w=>w.length>2);
-      return wa.some(w=>wb.includes(w));
-    };
-    return (shareWord(ah,mh)||ah===mh) && (shareWord(aa,ma)||aa===ma);
-  });
-  return found?.id||null;
 }
 function todayHasMatches(){
   // Check if any match kicks off within the next 3 hours or has started in the last 3 hours
