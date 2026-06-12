@@ -700,7 +700,9 @@ const FB = {
   messagingSenderId:"834459945548",
   appId:"1:834459945548:web:9147ca0e48dd1e2a82c2e9"
 };
-const API_KEY = "678ce20dc283605bb2ee2256932ee3fe";
+const API_KEY = "1999018bedd94885b93e17c5d69ff766"; // football-data.org
+const API_BASE_FD = "https://api.football-data.org/v4";
+const FD_HEADERS = {"X-Auth-Token": API_KEY};
 // Firebase Security Rules required:
 // - users/$uid: read/write only by $uid
 // - polla_info/$pollaId: read by any authenticated user (for joining)
@@ -708,7 +710,7 @@ const API_KEY = "678ce20dc283605bb2ee2256932ee3fe";
 // - pollas/$pollaId/members/$uid: write by $uid (own entry) or owner
 // - pollas/$pollaId/results: write by owner only
 // See Firebase Console > Realtime Database > Rules
-const API_BASE = "https://v3.football.api-sports.io";
+// football-data.org API active
 
 /* ─────────────────────────────────────────────────────────────────
    FIREBASE REALTIME DATABASE — REGLAS DE SEGURIDAD
@@ -839,7 +841,7 @@ const M_RAW = [
   {id:30,ph:"Grupos",gr:"C",aDate:"2026-06-19",aTime:"19:00",home:"Escocia",hf:"🏴󠁧󠁢󠁳󠁣󠁴󠁿",away:"Marruecos",af:"🇲🇦",r:"g",q:"Total tarjetas: menos o más de 3.5",opts:["Menos de 3.5","Más de 3.5"]},
   {id:31,ph:"Grupos",gr:"C",aDate:"2026-06-19",aTime:"21:30",home:"Brasil",hf:"🇧🇷",away:"Haití",af:"🇭🇹",r:"g",q:"¿Habrá tarjeta roja?",opts:["Sí","No"]},
   {id:32,ph:"Grupos",gr:"D",aDate:"2026-06-20",aTime:"00:00",home:"Turquía",hf:"🇹🇷",away:"Paraguay",af:"🇵🇾",r:"g",q:"¿Cuál equipo anota primero?",opts:["Turquía","Paraguay"]},
-  {id:33,ph:"Grupos",gr:"F",aDate:"2026-06-20",aTime:"14:00",home:"Países Bajos",hf:"🇳🇱",away:"Suecia",af:"🇸🇪",r:"g",q:"¿Gol de cabeza?",opts:["Sí","No"]},
+  {id:33,ph:"Grupos",gr:"F",aDate:"2026-06-20",aTime:"14:00",home:"Países Bajos",hf:"🇳🇱",away:"Suecia",af:"🇸🇪",r:"g",q:"¿Habrá gol en el primer tiempo?",opts:["Sí","No"]},
   {id:34,ph:"Grupos",gr:"E",aDate:"2026-06-20",aTime:"17:00",home:"Alemania",hf:"🇩🇪",away:"Costa de Marfil",af:"🇨🇮",r:"g",q:"¿Habrá gol en el segundo tiempo?",opts:["Sí","No"]},
   {id:35,ph:"Grupos",gr:"E",aDate:"2026-06-20",aTime:"21:00",home:"Ecuador",hf:"🇪🇨",away:"Curazao",af:"🏳️",r:"g",q:"¿Ambos equipos anotan?",opts:["Sí","No"]},
   {id:36,ph:"Grupos",gr:"F",aDate:"2026-06-21",aTime:"01:00",home:"Túnez",hf:"🇹🇳",away:"Japón",af:"🇯🇵",r:"g",q:"¿Habrá penal?",opts:["Sí","No"]},
@@ -867,7 +869,7 @@ const M_RAW = [
   {id:58,ph:"Grupos",gr:"F",aDate:"2026-06-25",aTime:"20:00",home:"Japón",hf:"🇯🇵",away:"Suecia",af:"🇸🇪",r:"g",q:"¿Habrá gol en el segundo tiempo?",opts:["Sí","No"]},
   {id:59,ph:"Grupos",gr:"D",aDate:"2026-06-25",aTime:"23:00",home:"Turquía",hf:"🇹🇷",away:"EEUU",af:"🇺🇸",r:"g",q:"¿Habrá penal?",opts:["Sí","No"]},
   {id:60,ph:"Grupos",gr:"D",aDate:"2026-06-25",aTime:"23:00",home:"Paraguay",hf:"🇵🇾",away:"Australia",af:"🇦🇺",r:"g",q:"¿Ambos equipos anotan?",opts:["Sí","No"]},
-  {id:61,ph:"Grupos",gr:"I",aDate:"2026-06-26",aTime:"16:00",home:"Noruega",hf:"🇳🇴",away:"Francia",af:"🇫🇷",r:"g",q:"¿Gol de cabeza?",opts:["Sí","No"]},
+  {id:61,ph:"Grupos",gr:"I",aDate:"2026-06-26",aTime:"16:00",home:"Noruega",hf:"🇳🇴",away:"Francia",af:"🇫🇷",r:"g",q:"¿Habrá gol en el primer tiempo?",opts:["Sí","No"]},
   {id:62,ph:"Grupos",gr:"I",aDate:"2026-06-26",aTime:"16:00",home:"Senegal",hf:"🇸🇳",away:"Irak",af:"🇮🇶",r:"g",q:"Total tarjetas: menos o más de 3.5",opts:["Menos de 3.5","Más de 3.5"]},
   {id:63,ph:"Grupos",gr:"H",aDate:"2026-06-26",aTime:"21:00",home:"Uruguay",hf:"🇺🇾",away:"España",af:"🇪🇸",r:"g",q:"¿Cuál equipo recibe la 1ª tarjeta amarilla?",opts:["Uruguay","España","Ninguno"]},
   {id:64,ph:"Grupos",gr:"H",aDate:"2026-06-26",aTime:"21:00",home:"Cabo Verde",hf:"🇨🇻",away:"Arabia Saudita",af:"🇸🇦",r:"g",q:"¿Habrá penal?",opts:["Sí","No"]},
@@ -921,7 +923,7 @@ const M_RAW = [
   {id:101,ph:"Semifinal",gr:"Semifinal",aDate:"2026-07-14",aTime:"15:00",home:"Gan.P97",hf:"🏳️",away:"Gan.P98",af:"🏳️",r:"2",q:"¿Habrá prórroga o penales?",opts:["Sí","No"]},
   {id:102,ph:"Semifinal",gr:"Semifinal",aDate:"2026-07-15",aTime:"16:00",home:"Gan.P99",hf:"🏳️",away:"Gan.P100",af:"🏳️",r:"2",q:"¿Ambos equipos anotan?",opts:["Sí","No"]},
   // 3er Puesto — Jul 18, Miami, 5pm ET
-  {id:103,ph:"3er Puesto",gr:"Final",aDate:"2026-07-18",aTime:"18:00",home:"Per.P101",hf:"🏳️",away:"Per.P102",af:"🏳️",r:"2",q:"¿Habrá prórroga?",opts:["Sí","No"]},
+  {id:103,ph:"3er Puesto",gr:"Final",aDate:"2026-07-18",aTime:"18:00",home:"Per.P101",hf:"🏳️",away:"Per.P102",af:"🏳️",r:"2",q:"¿Habrá prórroga (sin penales)?",opts:["Sí","No"]},
   // Gran Final — Jul 19, MetLife NJ, 3pm ET
   {id:104,ph:"Final",gr:"Final",aDate:"2026-07-19",aTime:"16:00",home:"Gan.P101",hf:"🏳️",away:"Gan.P102",af:"🏳️",r:"f",q:"¿Habrá prórroga o penales?",opts:["Sí","No"]},
 ];
@@ -2192,48 +2194,79 @@ window.savePollaName=async function(){
 // ── API AUTO-SYNC ──
 async function fetchLive(){
   try{
-    const res=await fetch(`${API_BASE}/fixtures?live=all&league=1&season=2026`,{headers:{"x-apisports-key":API_KEY}});
+    // football-data.org: GET /v4/competitions/WC/matches?status=IN_PLAY
+    const res = await fetch(`${API_BASE_FD}/competitions/WC/matches?status=IN_PLAY`, {headers: FD_HEADERS});
     if(!res.ok){
       setApiBadge(false, `HTTP ${res.status}`);
       console.warn("[API] fetchLive HTTP error:", res.status);
       return;
     }
-    const data=await res.json();
-    if(data.errors && Object.keys(data.errors).length){
-      setApiBadge(false, JSON.stringify(data.errors));
-      console.warn("[API] fetchLive errors:", data.errors);
-      return;
-    }
-    const liveCount = data.response?.length||0;
-    const reqsUsed = data.requests?.current||0;
-    const reqsLimit = data.requests?.limit_day||100;
-    setApiBadge(true, `${liveCount} en vivo · ${reqsUsed}/${reqsLimit} req`);
-    console.log(`[API] fetchLive OK: ${liveCount} live matches, ${reqsUsed}/${reqsLimit} requests used`);
-    if(!liveCount){
-      // No live matches — check today's finished matches we might have missed
+    const data = await res.json();
+    const matches = data.matches || [];
+    console.log(`[API] fetchLive OK: ${matches.length} live matches`);
+    setApiBadge(true, `${matches.length} en vivo`);
+    if(!matches.length){
       fetchTodayFinished();
       return;
     }
-    const updates={};
-    for(const fix of data.response){
-      const mid=matchFixture(fix); if(!mid) continue;
-      const isLive=["1H","2H","ET","BT","P"].includes(fix.fixture.status.short);
-      const isDone=["FT","AET","PEN"].includes(fix.fixture.status.short);
-      updates[`pollas/${CUR.pollaId}/results/${mid}`]={
-        h:fix.goals.home||0, a:fix.goals.away||0,
-        live:isLive, locked:isDone, min:fix.fixture.status.elapsed||0,
-        homeTeam:fix.teams.home.name, awayTeam:fix.teams.away.name,
+    const updates = {};
+    for(const fix of matches){
+      const mid = matchFixtureFD(fix); if(!mid) continue;
+      const h = fix.score?.fullTime?.home ?? fix.score?.halfTime?.home ?? 0;
+      const a = fix.score?.fullTime?.away ?? fix.score?.halfTime?.away ?? 0;
+      const min = fix.minute || 0;
+      updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
+        h, a, live: true, locked: false, min,
+        homeTeam: fix.homeTeam.name, awayTeam: fix.awayTeam.name
       };
-      if(isDone){
-        try{ await processMatchResult(fix,mid); }catch(e){}
-      }
     }
-    if(Object.keys(updates).length) await update(ref(db,"/"),updates);
+    if(Object.keys(updates).length) await update(ref(db,"/"), updates);
   }catch(e){
     setApiBadge(false, e.message);
-    console.log("API err:",e.message);
+    console.warn("[API] fetchLive error:", e.message);
   }
 }
+
+async function fetchTodayFinished(){
+  try{
+    const today = new Date().toISOString().split('T')[0];
+    const res = await fetch(`${API_BASE_FD}/competitions/WC/matches?dateFrom=${today}&dateTo=${today}&status=FINISHED`, {headers: FD_HEADERS});
+    if(!res.ok) return;
+    const data = await res.json();
+    const matches = data.matches || [];
+    console.log(`[API] fetchTodayFinished: ${matches.length} finished today`);
+    for(const fix of matches){
+      const mid = matchFixtureFD(fix); if(!mid) continue;
+      const cur = pollaLive.results?.[mid];
+      if(cur?.locked) continue;
+      const h = fix.score?.fullTime?.home ?? 0;
+      const a = fix.score?.fullTime?.away ?? 0;
+      await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
+        h, a, live: false, locked: true,
+        homeTeam: fix.homeTeam.name, awayTeam: fix.awayTeam.name
+      });
+      try{ await calcPoints(mid, h, a, null); }catch(e){}
+    }
+  }catch(e){ console.warn("[API] fetchTodayFinished error:", e.message); }
+}
+
+// Match fixture using football-data.org team names
+function matchFixtureFD(fix){
+  const ah = normalizeTeam(fix.homeTeam.name);
+  const aa = normalizeTeam(fix.awayTeam.name);
+  const found = MATCHES.find(m => {
+    const mh = normalizeTeam(m.home);
+    const ma = normalizeTeam(m.away);
+    const shareWord = (a,b) => {
+      const wa = a.split(" ").filter(w=>w.length>2);
+      const wb = b.split(" ").filter(w=>w.length>2);
+      return wa.some(w=>wb.includes(w));
+    };
+    return (shareWord(ah,mh)||ah===mh) && (shareWord(aa,ma)||aa===ma);
+  });
+  return found?.id||null;
+}
+
 
 function setApiBadge(ok, detail){
   const badge = document.getElementById('api-badge');
@@ -2253,7 +2286,7 @@ function setApiBadge(ok, detail){
 async function fetchTodayFinished(){
   try{
     const today = new Date().toISOString().split('T')[0];
-    const res=await fetch(`${API_BASE}/fixtures?league=1&season=2026&date=${today}&status=FT-AET-PEN`,{headers:{"x-apisports-key":API_KEY}});
+    const res=await fetch(`${API_BASE_FD}/competitions/WC/matches?dateFrom=${today}&dateTo=${today}&status=FINISHED`,{headers:FD_HEADERS});
     if(!res.ok) return;
     const data=await res.json();
     if(!data.response?.length) return;
@@ -2275,166 +2308,36 @@ window.testApiConnection = async function(btn){
   btn.textContent='⏳ Verificando...'; btn.disabled=true;
   const result = document.getElementById('api-test-result');
   result.style.display='block';
-  result.textContent='Conectando con api-football...';
+  result.textContent='Conectando con football-data.org...';
   try{
-    // Test 1: account status (no quota cost)
-    const statusRes = await fetch(`${API_BASE}/status`,{headers:{"x-apisports-key":API_KEY}});
-    if(!statusRes.ok){ 
-      result.innerHTML=`❌ Error HTTP ${statusRes.status} — la clave API puede ser inválida o el plan no permite llamadas desde browser (CORS)`;
-      setApiBadge(false, `HTTP ${statusRes.status}`);
-      btn.textContent='🔌 Verificar conexión API'; btn.disabled=false;
-      return;
-    }
-    const statusData = await statusRes.json();
-    if(statusData.errors && Object.keys(statusData.errors).length){
-      result.innerHTML=`❌ Error API: ${JSON.stringify(statusData.errors)}<br>Causa probable: clave inválida o plan no soporta llamadas desde browser`;
-      setApiBadge(false, 'Clave inválida');
-      btn.textContent='🔌 Verificar conexión API'; btn.disabled=false;
-      return;
-    }
-    const acc = statusData.response;
-    const reqsUsed = acc?.requests?.current;
-    const reqsLimit = acc?.requests?.limit_day;
-    const plan = acc?.subscription?.plan;
-    // Test 2: today's WC fixtures (costs 1 request)
+    // Test: get today WC matches (free, costs 1 request)
     const today = new Date().toISOString().split('T')[0];
-    const fixRes = await fetch(`${API_BASE}/fixtures?league=1&season=2026&date=${today}`,{headers:{"x-apisports-key":API_KEY}});
-    const fixData = await fixRes.json();
-    const matchCount = fixData.response?.length||0;
-    const reqsLeft = (reqsLimit||100) - (reqsUsed||0);
-    result.innerHTML=`✅ API conectada<br>Plan: <strong>${plan||'—'}</strong><br>Requests usados hoy: <strong>${reqsUsed||0} / ${reqsLimit||'—'}</strong> (quedan ${reqsLeft})<br>Partidos WC hoy: <strong>${matchCount}</strong>`;
-    setApiBadge(true, `Plan: ${plan} · ${reqsUsed}/${reqsLimit} usados`);
+    const res = await fetch(`${API_BASE_FD}/competitions/WC/matches?dateFrom=${today}&dateTo=${today}`, {headers: FD_HEADERS});
+    if(!res.ok){
+      result.innerHTML=`❌ Error HTTP ${res.status} — verificá el token`;
+      setApiBadge(false, `HTTP ${res.status}`);
+      btn.textContent='🔌 Verificar conexión API'; btn.disabled=false;
+      return;
+    }
+    const data = await res.json();
+    if(data.errorCode){
+      result.innerHTML=`❌ Error: ${data.message}`;
+      setApiBadge(false, data.message);
+      btn.textContent='🔌 Verificar conexión API'; btn.disabled=false;
+      return;
+    }
+    const matchCount = data.matches?.length||0;
+    const liveCount = data.matches?.filter(m=>m.status==='IN_PLAY').length||0;
+    const finishedCount = data.matches?.filter(m=>m.status==='FINISHED').length||0;
+    result.innerHTML=`✅ football-data.org conectado<br>Partidos WC hoy: <strong>${matchCount}</strong><br>En vivo: <strong>${liveCount}</strong> · Finalizados: <strong>${finishedCount}</strong>`;
+    setApiBadge(true, `${matchCount} partidos hoy`);
   }catch(e){
-    result.innerHTML=`❌ ${e.message}<br><br>Causa más probable: el plan de api-football no permite llamadas CORS desde browser. Necesitás un plan que lo soporte, o usar un servidor proxy.`;
+    result.innerHTML=`❌ ${e.message}`;
     setApiBadge(false, e.message);
   }
   btn.textContent='🔌 Verificar conexión API'; btn.disabled=false;
 };
-async function processMatchResult(fix,matchId){
-  const evRes=await fetch(`${API_BASE}/fixtures/events?fixture=${fix.fixture.id}`,{headers:{"x-apisports-key":API_KEY}});
-  if(!evRes.ok) return;
-  const evData=await evRes.json();
-  const events=evData.response||[];
-  const m=MATCHES.find(x=>x.id===matchId); if(!m) return;
-  const rh=fix.goals.home||0, ra=fix.goals.away||0;
-  const q=m.q;
-  let qr=null;
 
-  // ── Helper: match team name from API to home or away ──
-  // Uses multiple words for robustness (handles "Rep. Checa", "Costa de Marfil", etc.)
-  function matchTeam(apiTeamName, home, away){
-    const api=apiTeamName.toLowerCase();
-    // Score each team by how many words match
-    const scoreTeam=(team)=>{
-      const words=team.toLowerCase().split(" ").filter(w=>w.length>2);
-      return words.filter(w=>api.includes(w)).length;
-    };
-    const hs=scoreTeam(home), as=scoreTeam(away);
-    if(hs>as) return home;
-    if(as>hs) return away;
-    // Fallback: check if api name contains first meaningful word
-    const hw=home.toLowerCase().split(" ").find(w=>w.length>2)||"";
-    if(hw&&api.includes(hw)) return home;
-    return null; // can't determine
-  }
-
-  // ── Precompute useful facts from events ──
-  const goals=events.filter(e=>e.type==="Goal");
-  const cards=events.filter(e=>e.type==="Card");
-  const firstGoal=goals[0]||null;
-  const firstYellow=cards.find(e=>e.detail==="Yellow Card")||null;
-  const hasRedCard=cards.some(e=>e.detail==="Red Card"||e.detail==="Red Card (2nd Yellow)");
-  const hasPenalty=events.some(e=>e.type==="Goal"&&e.detail==="Penalty");
-  const hasOwnGoal=goals.some(e=>e.detail==="Own Goal");
-  const hasHeader=goals.some(e=>e.detail==="Header");
-  const earlyGoal=goals.some(e=>e.time?.elapsed<=15);
-  const lateGoal=goals.some(e=>e.time?.elapsed>=80); // min 80-90+ covers last 10 min
-  const totalGoals=rh+ra;
-  const totalCards=cards.length;
-  const goalDiff=Math.abs(rh-ra);
-  const isAET=fix.fixture.status.short==="AET";
-  const isPEN=fix.fixture.status.short==="PEN";
-  const hasExtraTime=isAET||isPEN;
-
-  // ── Match each question type ──
-  if(q.includes("1ª tarjeta amarilla")||q.includes("primera tarjeta")){
-    if(!firstYellow){
-      qr="Ninguno";
-    } else {
-      const matched=matchTeam(firstYellow.team.name, m.home, m.away);
-      qr=matched||"Ninguno";
-    }
-  }
-  else if(q.includes("anota primero")){
-    if(!firstGoal){
-      // No goals — 0-0 draw, no team scored first
-      qr="Ninguno"; // fallback
-    } else {
-      // For own goals, credit the scoring team (the one that benefited)
-      const scoringTeam=firstGoal.detail==="Own Goal"
-        ? (firstGoal.team.name===fix.teams.home.name ? m.away : m.home)
-        : matchTeam(firstGoal.team.name, m.home, m.away);
-      qr=scoringTeam||m.home;
-    }
-  }
-  else if(q.includes("Ambos equipos anotan")){
-    qr=(rh>0&&ra>0)?"Sí":"No";
-  }
-  else if(q.includes("menos o más de 2.5")){
-    qr=totalGoals>2?"Más de 2.5":"Menos de 2.5";
-  }
-  else if(q.includes("gol en el segundo tiempo")){
-    // Any goal with elapsed > 45 (or in extra time)
-    const secondHalfGoal=goals.some(e=>e.time?.elapsed>45||e.time?.extra>0);
-    qr=secondHalfGoal?"Sí":"No";
-  }
-  else if(q.includes("menos o más de 1.5")){
-    qr=totalGoals>1?"Más de 1.5":"Menos de 1.5";
-  }
-  else if(q.includes("tarjetas")&&q.includes("3.5")){
-    qr=totalCards>3?"Más de 3.5":"Menos de 3.5";
-  }
-  else if(q.includes("tarjeta roja")){
-    qr=hasRedCard?"Sí":"No";
-  }
-  else if(q.includes("Habrá penal")||q.includes("habrá penal")){
-    qr=hasPenalty?"Sí":"No";
-  }
-  else if(q.includes("gol de cabeza")||q.includes("Gol de cabeza")){
-    // Covers both "¿Habrá gol de cabeza?" and "¿Gol de cabeza?"
-    qr=hasHeader?"Sí":"No";
-  }
-  else if(q.includes("autogol")){
-    qr=hasOwnGoal?"Sí":"No";
-  }
-  else if(q.includes("prórroga o penales")){
-    qr=hasExtraTime?"Sí":"No";
-  }
-  else if(q.includes("prórroga")&&!q.includes("penales")){
-    // "¿Habrá prórroga?" — only AET counts, not straight to penalties
-    qr=(isAET||isPEN)?"Sí":"No";
-  }
-  else if(q.includes("primeros 15 min")){
-    qr=earlyGoal?"Sí":"No";
-  }
-  else if(q.includes("últimos 10 min")){
-    // Covers minutes 80-90+ including injury time
-    qr=lateGoal?"Sí":"No";
-  }
-  else if(q.includes("2+ goles de diferencia")||q.includes("Ganador con 2")){
-    qr=goalDiff>=2?"Sí":"No";
-  }
-  else if(q.includes("5,5 córners")){
-    // Count corner kick events from both teams
-    const corners=events.filter(e=>e.type==="Corner");
-    qr=corners.length>5?"Sí":"No";
-  }
-
-  if(qr){
-    await update(ref(db,`pollas/${CUR.pollaId}/results/${matchId}`),{qr});
-    await calcPoints(matchId,rh,ra,qr);
-  }
-}
 
 async function calcPoints(matchId,rh,ra,qr){
   // Guard: read fresh data from Firebase to avoid using stale local snapshot
@@ -2551,57 +2454,40 @@ window.adminRecalcMatch = async function(btn){
 };
 async function fetchScorers(){
   try{
-    const res=await fetch(`${API_BASE}/players/topscorers?league=1&season=2026`,{headers:{"x-apisports-key":API_KEY}});
+    const res = await fetch(`${API_BASE_FD}/competitions/WC/scorers?limit=30`, {headers: FD_HEADERS});
     if(!res.ok) return;
-    const data=await res.json();
-    if(!data.response?.length) return;
-    // Store the full live list directly — no hardcoded names needed
-    const scorerList = data.response.slice(0,30).map(item=>({
+    const data = await res.json();
+    if(!data.scorers?.length) return;
+    const scorerList = data.scorers.map(item=>({
       n: item.player.name,
-      t: item.statistics[0]?.team?.name||"",
-      g: item.statistics[0]?.goals?.total||0
+      t: item.team?.name||"",
+      g: item.goals?.goals||0
     }));
     await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
-  }catch(e){}
+    console.log(`[API] fetchScorers OK: ${scorerList.length} scorers`);
+  }catch(e){ console.warn("[API] fetchScorers error:", e.message); }
 }
 // ── AUTO BRACKET: update team names in knockout rounds from API ──
 async function fetchKnockoutTeams(){
   try{
-    // Get all fixtures for knockout rounds (16avos onwards = rounds 5+)
-    const res = await fetch(`${API_BASE}/fixtures?league=1&season=2026&round=Round%20of%2032`,{headers:{"x-apisports-key":API_KEY}});
+    const res = await fetch(`${API_BASE_FD}/competitions/WC/matches?stage=ROUND_OF_32&status=FINISHED`, {headers: FD_HEADERS});
     if(!res.ok) return;
     const data = await res.json();
-    if(!data.response?.length) return;
+    // Update knockout bracket from results
     const updates = {};
-    data.response.forEach(fix=>{
-      const mid = matchFixtureByDate(fix);
-      if(!mid) return;
-      const home = fix.teams.home.name;
-      const away = fix.teams.away.name;
-      if(home && away && !home.includes("TBD") && !away.includes("TBD")){
-        updates[`pollas/${CUR.pollaId}/results/${mid}/homeTeam`] = home;
-        updates[`pollas/${CUR.pollaId}/results/${mid}/awayTeam`] = away;
+    (data.matches||[]).forEach(fix=>{
+      const mid = matchFixtureFD(fix); if(!mid) return;
+      if(fix.status==='FINISHED'){
+        const h = fix.score?.fullTime?.home??0;
+        const a = fix.score?.fullTime?.away??0;
+        updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
+          h, a, live:false, locked:true,
+          homeTeam:fix.homeTeam.name, awayTeam:fix.awayTeam.name
+        };
       }
     });
-    // Also fetch remaining rounds
-    const rounds = ["Round of 16","Quarter-finals","Semi-finals","3rd Place Final","Final"];
-    for(const round of rounds){
-      const r2 = await fetch(`${API_BASE}/fixtures?league=1&season=2026&round=${encodeURIComponent(round)}`,{headers:{"x-apisports-key":API_KEY}});
-      if(!r2.ok) continue;
-      const d2 = await r2.json();
-      (d2.response||[]).forEach(fix=>{
-        const mid = matchFixtureByDate(fix);
-        if(!mid) return;
-        const home = fix.teams.home.name;
-        const away = fix.teams.away.name;
-        if(home && away && !home.includes("TBD") && !away.includes("TBD")){
-          updates[`pollas/${CUR.pollaId}/results/${mid}/homeTeam`] = home;
-          updates[`pollas/${CUR.pollaId}/results/${mid}/awayTeam`] = away;
-        }
-      });
-    }
     if(Object.keys(updates).length) await update(ref(db,"/"), updates);
-  }catch(e){ console.log("Bracket API err:", e.message); }
+  }catch(e){ console.warn("[API] fetchKnockoutTeams error:", e.message); }
 }
 
 // Match fixture by date for knockout rounds (name matching less reliable)
@@ -2635,18 +2521,20 @@ function matchFixtureByDate(fix){
 async function fetchTournamentResults(){
   try{
     // Get final standings — champion is the winner of the Final
-    const finalRes = await fetch(`${API_BASE}/fixtures?league=1&season=2026&round=Final`,{headers:{"x-apisports-key":API_KEY}});
+    // Get the final match
+    const finalRes = await fetch(`${API_BASE_FD}/competitions/WC/matches?stage=FINAL`, {headers: FD_HEADERS});
     if(!finalRes.ok) return;
     const finalData = await finalRes.json();
-    const finalFix = finalData.response?.[0];
-    if(!finalFix||!["FT","AET","PEN"].includes(finalFix.fixture.status.short)) return;
+    const finalFix = (finalData.matches||[]).find(m=>m.status==="FINISHED");
+    if(!finalFix) return;
 
-    const champion = finalFix.teams.home.winner ? finalFix.teams.home.name : finalFix.teams.away.name;
+    const homeWon = finalFix.score?.fullTime?.home > finalFix.score?.fullTime?.away;
+    const champion = homeWon ? finalFix.homeTeam.name : finalFix.awayTeam.name;
 
     // Get top scorer
-    const scorerRes = await fetch(`${API_BASE}/players/topscorers?league=1&season=2026`,{headers:{"x-apisports-key":API_KEY}});
+    const scorerRes = await fetch(`${API_BASE_FD}/competitions/WC/scorers?limit=1`, {headers: FD_HEADERS});
     const scorerData = await scorerRes.json();
-    const topScorer = scorerData.response?.[0]?.player?.name||null;
+    const topScorer = scorerData.scorers?.[0]?.player?.name||null;
 
     // Store official results in Firebase for reference
     await update(ref(db,`pollas/${CUR.pollaId}/officialResults`),{
