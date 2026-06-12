@@ -701,8 +701,8 @@ const FB = {
   appId:"1:834459945548:web:9147ca0e48dd1e2a82c2e9"
 };
 const API_KEY = "1999018bedd94885b93e17c5d69ff766"; // football-data.org
-const API_BASE_FD = "https://api.football-data.org/v4";
-const FD_HEADERS = {"X-Auth-Token": API_KEY};
+const API_BASE_FD = "/api/football?path="; // Vercel proxy — avoids CORS
+const FD_HEADERS = {}; // token handled server-side in the proxy
 // Firebase Security Rules required:
 // - users/$uid: read/write only by $uid
 // - polla_info/$pollaId: read by any authenticated user (for joining)
@@ -923,9 +923,9 @@ const M_RAW = [
   {id:101,ph:"Semifinal",gr:"Semifinal",aDate:"2026-07-14",aTime:"15:00",home:"Gan.P97",hf:"🏳️",away:"Gan.P98",af:"🏳️",r:"2",q:"¿Habrá prórroga o penales?",opts:["Sí","No"]},
   {id:102,ph:"Semifinal",gr:"Semifinal",aDate:"2026-07-15",aTime:"16:00",home:"Gan.P99",hf:"🏳️",away:"Gan.P100",af:"🏳️",r:"2",q:"¿Ambos equipos anotan?",opts:["Sí","No"]},
   // 3er Puesto — Jul 18, Miami, 5pm ET
-  {id:103,ph:"3er Puesto",gr:"Final",aDate:"2026-07-18",aTime:"18:00",home:"Per.P101",hf:"🏳️",away:"Per.P102",af:"🏳️",r:"2",q:"¿Habrá prórroga (sin penales)?",opts:["Sí","No"]},
+  {id:103,ph:"3er Puesto",gr:"Final",aDate:"2026-07-18",aTime:"18:00",home:"Per.P101",hf:"🏳️",away:"Per.P102",af:"🏳️",r:"2",q:"¿El partido termina en prórroga?",opts:["Sí","No"]},
   // Gran Final — Jul 19, MetLife NJ, 3pm ET
-  {id:104,ph:"Final",gr:"Final",aDate:"2026-07-19",aTime:"16:00",home:"Gan.P101",hf:"🏳️",away:"Gan.P102",af:"🏳️",r:"f",q:"¿Habrá prórroga o penales?",opts:["Sí","No"]},
+  {id:104,ph:"Final",gr:"Final",aDate:"2026-07-19",aTime:"16:00",home:"Gan.P101",hf:"🏳️",away:"Gan.P102",af:"🏳️",r:"f",q:"Total goles: menos o más de 3.5",opts:["Menos de 3.5","Más de 3.5"]},
 ];
 
 // ── LOCAL DATE/TIME CONVERSION ──
@@ -2195,7 +2195,7 @@ window.savePollaName=async function(){
 async function fetchLive(){
   try{
     // football-data.org: GET /v4/competitions/WC/matches?status=IN_PLAY
-    const res = await fetch(`${API_BASE_FD}/competitions/WC/matches?status=IN_PLAY`, {headers: FD_HEADERS});
+    const res = await fetch(`${API_BASE_FD}competitions/WC/matches?status=IN_PLAY`);
     if(!res.ok){
       setApiBadge(false, `HTTP ${res.status}`);
       console.warn("[API] fetchLive HTTP error:", res.status);
@@ -2230,7 +2230,7 @@ async function fetchLive(){
 async function fetchTodayFinished(){
   try{
     const today = new Date().toISOString().split('T')[0];
-    const res = await fetch(`${API_BASE_FD}/competitions/WC/matches?dateFrom=${today}&dateTo=${today}&status=FINISHED`, {headers: FD_HEADERS});
+    const res = await fetch(`${API_BASE_FD}competitions/WC/matches?dateFrom=${today}&dateTo=${today}&status=FINISHED`);
     if(!res.ok) return;
     const data = await res.json();
     const matches = data.matches || [];
@@ -2283,26 +2283,7 @@ function setApiBadge(ok, detail){
 }
 
 // Fetch today's matches that may have finished but weren't caught live
-async function fetchTodayFinished(){
-  try{
-    const today = new Date().toISOString().split('T')[0];
-    const res=await fetch(`${API_BASE_FD}/competitions/WC/matches?dateFrom=${today}&dateTo=${today}&status=FINISHED`,{headers:FD_HEADERS});
-    if(!res.ok) return;
-    const data=await res.json();
-    if(!data.response?.length) return;
-    for(const fix of data.response){
-      const mid=matchFixture(fix); if(!mid) continue;
-      const cur=pollaLive.results?.[mid];
-      if(cur?.locked) continue; // already processed
-      await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
-        h:fix.goals.home||0, a:fix.goals.away||0,
-        live:false, locked:true,
-        homeTeam:fix.teams.home.name, awayTeam:fix.teams.away.name,
-      });
-      try{ await processMatchResult(fix,mid); }catch(e){}
-    }
-  }catch(e){ console.log("fetchTodayFinished err:",e.message); }
-}
+
 
 window.testApiConnection = async function(btn){
   btn.textContent='⏳ Verificando...'; btn.disabled=true;
@@ -2312,7 +2293,7 @@ window.testApiConnection = async function(btn){
   try{
     // Test: get today WC matches (free, costs 1 request)
     const today = new Date().toISOString().split('T')[0];
-    const res = await fetch(`${API_BASE_FD}/competitions/WC/matches?dateFrom=${today}&dateTo=${today}`, {headers: FD_HEADERS});
+    const res = await fetch(`${API_BASE_FD}competitions/WC/matches?dateFrom=${today}&dateTo=${today}`);
     if(!res.ok){
       result.innerHTML=`❌ Error HTTP ${res.status} — verificá el token`;
       setApiBadge(false, `HTTP ${res.status}`);
@@ -2454,7 +2435,7 @@ window.adminRecalcMatch = async function(btn){
 };
 async function fetchScorers(){
   try{
-    const res = await fetch(`${API_BASE_FD}/competitions/WC/scorers?limit=30`, {headers: FD_HEADERS});
+    const res = await fetch(`${API_BASE_FD}competitions/WC/scorers?limit=30`);
     if(!res.ok) return;
     const data = await res.json();
     if(!data.scorers?.length) return;
@@ -2470,7 +2451,7 @@ async function fetchScorers(){
 // ── AUTO BRACKET: update team names in knockout rounds from API ──
 async function fetchKnockoutTeams(){
   try{
-    const res = await fetch(`${API_BASE_FD}/competitions/WC/matches?stage=ROUND_OF_32&status=FINISHED`, {headers: FD_HEADERS});
+    const res = await fetch(`${API_BASE_FD}competitions/WC/matches?stage=ROUND_OF_32&status=FINISHED`);
     if(!res.ok) return;
     const data = await res.json();
     // Update knockout bracket from results
@@ -2522,7 +2503,7 @@ async function fetchTournamentResults(){
   try{
     // Get final standings — champion is the winner of the Final
     // Get the final match
-    const finalRes = await fetch(`${API_BASE_FD}/competitions/WC/matches?stage=FINAL`, {headers: FD_HEADERS});
+    const finalRes = await fetch(`${API_BASE_FD}competitions/WC/matches?stage=FINAL`);
     if(!finalRes.ok) return;
     const finalData = await finalRes.json();
     const finalFix = (finalData.matches||[]).find(m=>m.status==="FINISHED");
@@ -2532,7 +2513,7 @@ async function fetchTournamentResults(){
     const champion = homeWon ? finalFix.homeTeam.name : finalFix.awayTeam.name;
 
     // Get top scorer
-    const scorerRes = await fetch(`${API_BASE_FD}/competitions/WC/scorers?limit=1`, {headers: FD_HEADERS});
+    const scorerRes = await fetch(`${API_BASE_FD}competitions/WC/scorers?limit=1`);
     const scorerData = await scorerRes.json();
     const topScorer = scorerData.scorers?.[0]?.player?.name||null;
 
@@ -2575,22 +2556,6 @@ function normalizeTeam(s){
     .replace(/[^a-z0-9 ]/g,"")
     .replace(/(republic|rep|democratic|dem|korea|south|north|ivory|coast|new|zealand|saudi|arabia|cape|verde|united|states|arab|emirates)/g,"")
     .replace(/\s+/g," ").trim();
-}
-function matchFixture(fix){
-  const ah = normalizeTeam(fix.teams.home.name);
-  const aa = normalizeTeam(fix.teams.away.name);
-  const found = MATCHES.find(m => {
-    const mh = normalizeTeam(m.home);
-    const ma = normalizeTeam(m.away);
-    // Match if normalized names share at least one meaningful word
-    const shareWord = (a,b) => {
-      const wa = a.split(" ").filter(w=>w.length>2);
-      const wb = b.split(" ").filter(w=>w.length>2);
-      return wa.some(w=>wb.includes(w));
-    };
-    return (shareWord(ah,mh)||ah===mh) && (shareWord(aa,ma)||aa===ma);
-  });
-  return found?.id||null;
 }
 function todayHasMatches(){
   // Check if any match kicks off within the next 3 hours or has started in the last 3 hours
