@@ -1243,6 +1243,7 @@ function startApp(){
   buildGlobal();
   subscribeFirebase();
   startApiSync();
+  startAutoLiveCheck();
   showTab("partidos",document.querySelector(".tab"));
 }
 
@@ -1805,9 +1806,10 @@ function renderLB(){
   const rk=["g","s","b"];
   const myRank=sorted.findIndex(m=>m.uid===CUR.uid);
   if(myRank>=0){
-    document.getElementById("b-pts").textContent=sorted[myRank].pts||0;
+    const myProjected = (sorted[myRank].pts||0) + (bonus[sorted[myRank].uid]||0);
+    document.getElementById("b-pts").textContent=myProjected;
     document.getElementById("b-pos").textContent="Posición #"+(myRank+1);
-    document.getElementById("s-pts").textContent=sorted[myRank].pts||0;
+    document.getElementById("s-pts").textContent=myProjected;
     document.getElementById("s-pos").textContent="#"+(myRank+1);
     document.getElementById("s-ok").textContent=(sorted[myRank].ok||0)-(sorted[myRank].ex||0);
     document.getElementById("s-ex").textContent=sorted[myRank].ex||0;
@@ -1826,12 +1828,16 @@ function renderLB(){
     const liveCircle=hasLive
       ?`<div style="display:flex;flex-direction:column;align-items:center;gap:1px;margin-right:6px"><div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;${circleStyle}">+${b}</div><div style="font-size:9px;color:var(--t3);font-weight:600">en vivo</div></div>`
       :"";
+    const projTotal = (m.pts||0) + b;
+    const ptsDisplay = hasLive
+      ? `<div class="lbp" style="color:${b>0?"var(--gd)":"var(--t1)"}">${projTotal} <span class="lbpu">pts</span></div>`
+      : `<div class="lbp">${m.pts||0} <span class="lbpu">pts</span></div>`;
     return`<div class="lbrow${isMe?" me-row":""}">
       <div class="lbrank ${rk[i]||""}">${i+1}</div>
       <div class="av" style="background:${bg};color:${tc}">${av}</div>
       <div class="lbinfo"><div class="lbn">${m.dname||"?"}${isMe?" <span style='color:var(--bm);font-size:10px'>(tú)</span>":""}</div><div class="lbs">${(m.ok||0)-(m.ex||0)} acertados · ${m.ex||0} exactos</div></div>
-      ${liveCircle}
-      <div class="lbp">${m.pts||0} <span class="lbpu">pts</span></div>
+      ${hasLive ? liveCircle : ""}
+      ${ptsDisplay}
     </div>`;
   }).join("");
 }
@@ -1965,13 +1971,12 @@ function buildAdmin(){
   const members=pollaLive.members||{};
   const ml=document.getElementById("members-list");
   const results=pollaLive.results||{};
-  // Today's open matches (not locked, not live, kickoff not passed)
+  // Today's matches — use calendar date (Chile timezone -04:00 or -03:00)
   const now = Date.now();
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
   const todayMatches = MATCHES.filter(m=>{
-    if(results[m.id]?.locked || results[m.id]?.live) return false;
-    const ko = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
-    // Match is "today" if kickoff is within next 12h or past 3h
-    return ko - now < 12*60*60*1000 && now - ko < 3*60*60*1000;
+    if(m.aTime==="s/h") return false;
+    return m.aDate === todayStr; // all of today's matches regardless of status
   });
   const todayLabel = todayMatches.length
     ? `Hoy: ${todayMatches.map(m=>m.hf+m.home.split(" ")[0]+" vs "+m.af+m.away.split(" ")[0]).join(", ")}`
@@ -2864,8 +2869,8 @@ function renderMultiPollaPanel(pollaData){
         Se aplica a: <strong>${pollaNames.join(' · ')}</strong>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="mp-act-btn" style="flex:1;background:var(--bm);color:#fff;padding:8px" onclick="mpUpdateAllLive(${m.id},pollaData,this)">🔄 Actualizar score</button>
-        <button class="mp-act-btn" style="flex:1;background:var(--gd);color:#fff;padding:8px" onclick="mpFinalizeAll(${m.id},pollaData,this)">✅ Finalizar partido</button>
+        <button class="mp-act-btn" style="flex:1;background:var(--bm);color:#fff;padding:8px" onclick="mpUpdateAllLive(${m.id},window._mpPollaData,this)">🔄 Actualizar score</button>
+        <button class="mp-act-btn" style="flex:1;background:var(--gd);color:#fff;padding:8px" onclick="mpFinalizeAll(${m.id},window._mpPollaData,this)">✅ Finalizar partido</button>
       </div>
       ` : `<div style="font-size:12px;color:var(--t3);text-align:center;padding:8px 0">Partido finalizado en todas las pollas</div>`}
     </div>`;
@@ -2951,6 +2956,31 @@ Pregunta extra: ${s.extra}`)) return;
 };
 
 
+
+// ── AUTO LIVE AT KICKOFF ──
+function startAutoLiveCheck(){
+  // Every 30s, check if any match has passed kickoff but isn't live yet — mark it live
+  setInterval(async ()=>{
+    if(!CUR.pollaId || !CUR.isOwner) return; // only owner writes to avoid spam
+    const results = pollaLive.results||{};
+    const now = Date.now();
+    for(const m of MATCHES){
+      if(m.aTime==="s/h") continue;
+      const r = results[m.id];
+      if(r?.locked || r?.live) continue; // already handled
+      const ko = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
+      if(now >= ko && now - ko < 120*60*1000){ // within 2h of kickoff
+        try{
+          await update(ref(db,`pollas/${CUR.pollaId}/results/${m.id}`),{
+            live:true, locked:false, h:r?.h||0, a:r?.a||0,
+            homeTeam:m.home, awayTeam:m.away, min:0
+          });
+          console.log(`[AUTO] Match ${m.home} vs ${m.away} marked live at kickoff`);
+        }catch(e){}
+      }
+    }
+  }, 30*1000);
+}
 
 // ── INPUT HANDLERS ──
 document.getElementById("inp-email")?.addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("inp-pass")?.focus();});
