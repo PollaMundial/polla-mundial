@@ -2340,7 +2340,14 @@ async function calcPoints(matchId,rh,ra,qr){
   const rp=PTS[m.r]||PTS_DEF.g;
   const updates={};
   Object.entries(members).forEach(([uid,mem])=>{
-    const p=mem.picks?.[matchId]; if(!p) return;
+    let p=mem.picks?.[matchId];
+    // If no pick, generate deterministic random (same logic as display)
+    if(!p||(!p.h&&!p.a&&!p.extra)){
+      const seed=(uid+String(matchId)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+      p={h:seed%4, a:(seed*7+3)%4, extra:m.opts[(seed*13)%m.opts.length]};
+      // Save random pick to Firebase so it's visible in results
+      updates[`pollas/${CUR.pollaId}/members/${uid}/picks/${matchId}`]=p;
+    }
     const exact=p.h===rh&&p.a===ra;
     const winOk=(p.h>p.a&&rh>ra)||(p.h<p.a&&rh<ra)||(p.h===p.a&&rh===ra);
     let pts=exact?rp.e:winOk?rp.w:0;
@@ -2787,7 +2794,13 @@ Pregunta extra: ${s.extra}`)) return;
         const rp = PTS[m?.r||'g']||PTS_DEF.g;
         const updates = {};
         Object.entries(members).forEach(([uid,mem])=>{
-          const pick = mem.picks?.[mid]; if(!pick) return;
+          let pick = mem.picks?.[mid];
+          if(!pick||(!pick.h&&!pick.a&&!pick.extra)){
+            const seed=(uid+String(mid)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+            const matchObj=MATCHES.find(x=>x.id===mid);
+            pick={h:seed%4, a:(seed*7+3)%4, extra:matchObj?.opts[(seed*13)%(matchObj?.opts?.length||2)]};
+            updates[`pollas/${p.pollaId}/members/${uid}/picks/${mid}`]=pick;
+          }
           const exact=pick.h===s.h&&pick.a===s.a;
           const winOk=(pick.h>pick.a&&s.h>s.a)||(pick.h<pick.a&&s.h<s.a)||(pick.h===pick.a&&s.h===s.a);
           let pts=exact?rp.e:winOk?rp.w:0; if(pick.extra===s.extra) pts+=rp.x;
