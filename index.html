@@ -598,6 +598,14 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div class="rule-tip">💡 El marcador exacto ya incluye los puntos de acertar el ganador.</div>
       </div>
       <div class="rule-block">
+        <div class="rule-title">🥇 ¿Quién gana la polla?</div>
+        <div class="rule-tip">Gana el jugador con más puntos al finalizar el torneo.</div>
+        <div class="rule-row" style="margin-top:8px"><span>1° Criterio</span><span class="rule-pts" style="color:var(--gd)">Más puntos</span></div>
+        <div class="rule-row"><span>2° Criterio (desempate)</span><span class="rule-pts" style="color:var(--am)">Más marcadores exactos</span></div>
+        <div class="rule-row"><span>3° Criterio (desempate)</span><span class="rule-pts" style="color:var(--bm)">Más resultados acertados</span></div>
+        <div class="rule-tip" style="margin-top:8px">💡 Un marcador exacto (ej: 2-1) ya cuenta también como resultado acertado.</div>
+      </div>
+      <div class="rule-block">
         <div class="rule-title">🌍 Predicciones globales</div>
         <div class="rule-row"><span>Campeón</span><span class="rule-pts">10 pts</span></div>
         <div class="rule-row"><span>Goleador</span><span class="rule-pts">5 pts</span></div>
@@ -1585,7 +1593,12 @@ function calcLiveBonus(){
     const r=results[m.id]; if(!r) return;
     const rp=PTS[m.r]||PTS_DEF.g;
     Object.entries(members).forEach(([uid,mem])=>{
-      const p=mem.picks?.[m.id]; if(!p) return;
+      let p=mem.picks?.[m.id];
+      // Apply same random pick logic as display if no pick saved
+      if(!p||(!p.h&&!p.a&&!p.extra)){
+        const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+        p={h:seed%4, a:(seed*7+3)%4, extra:m.opts[(seed*13)%m.opts.length]};
+      }
       const exact=p.h===r.h&&p.a===r.a;
       const winOk=(p.h>p.a&&r.h>r.a)||(p.h<p.a&&r.h<r.a)||(p.h===p.a&&r.h===r.a);
       const qOk=r.qr&&p.extra===r.qr;
@@ -1797,11 +1810,13 @@ function renderLB(){
     }
   });
 
-  // Sort by projected total when live, otherwise by current pts
+  // Sort: 1) total pts, 2) exact scores, 3) correct results
   const sorted=Object.values(deduped).sort((a,b)=>{
     const aTotal=(a.pts||0)+(bonus[a.uid]||0);
     const bTotal=(b.pts||0)+(bonus[b.uid]||0);
-    return bTotal-aTotal;
+    if(bTotal!==aTotal) return bTotal-aTotal;
+    if((b.ex||0)!==(a.ex||0)) return (b.ex||0)-(a.ex||0);
+    return (b.ok||0)-(a.ok||0);
   });
 
   if(!sorted.length){ document.getElementById("lb-c").innerHTML=`<div class="empty"><div class="ei">🏆</div><p>La tabla aparecerá cuando haya resultados.</p></div>`; return; }
