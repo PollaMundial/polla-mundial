@@ -637,7 +637,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div class="admin-hdr-s">Solo visible para el creador. Resultados actualizados automáticamente por API cada 3 min.</div>
       </div>
       <button class="sbtn full" style="background:var(--pd);margin-bottom:12px" onclick="openMultiPollaPanel()">🎛️ Panel multi-polla — actualizar todas a la vez</button>
-      <button class="sbtn full" style="background:var(--t2);margin-bottom:12px" onclick="forceSyncScorers(this)">⚽ Sincronizar tabla de goleadores</button>
+
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div style="font-size:13px;font-weight:600;color:var(--t1)">Estado API</div>
         <span class="api-badge" id="api-badge" style="background:var(--bg);color:var(--t3)">⏳ Sin verificar</span>
@@ -1283,7 +1283,8 @@ function renderAll(){
   if(document.getElementById("tc-mundial").classList.contains("active")){
     renderGroupTable(curGroup);
     buildCruces();
-    buildScorers();
+    seedScorers();
+  buildScorers();
   }
 }
 window.goToGlobal=function(){
@@ -1976,7 +1977,7 @@ function buildScorers(){
   if(liveList && liveList.length){
     el.innerHTML=`<div class="card">
       <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores</div>
-      ${liveList.filter(s=>s.g>0).map((s,i)=>`
+      ${liveList.filter(s=>s.g>0).slice(0,7).map((s,i)=>`
         <div class="scorer-row">
           <div class="scorer-rank${i<3?" top":""}">${i+1}</div>
           <div style="flex:1">
@@ -2431,12 +2432,68 @@ async function autoAnswerQuestion(espnEventId, mid){
   }
 }
 
+// Spanish to English team name map — covers all 48 WC 2026 nations
+const TEAM_ES_EN = {
+  // Group A
+  "sudáfrica":"south africa","sudafrica":"south africa",
+  "corea del sur":"south korea","corea":"south korea",
+  "república checa":"czech republic","chequia":"czechia",
+  // Group B
+  "canadá":"canada","bosnia-herzegovina":"bosnia and herzegovina",
+  "bosnia":"bosnia and herzegovina","bosnia y herzegovina":"bosnia and herzegovina",
+  "qatar":"qatar","catar":"qatar",
+  "suiza":"switzerland",
+  // Group C
+  "cabo verde":"cape verde","costa de marfil":"ivory coast","cote d'ivoire":"ivory coast",
+  "ecuador":"ecuador",
+  // Group D
+  "estados unidos":"united states","eeuu":"united states","usa":"united states",
+  "turquía":"turkey","türkiye":"turkey","turquia":"turkey",
+  "australia":"australia","paraguay":"paraguay",
+  // Group E
+  "alemania":"germany","curazao":"curacao","curaçao":"curacao",
+  // Group F
+  "países bajos":"netherlands","holanda":"netherlands","japón":"japan",
+  "suecia":"sweden","túnez":"tunisia","tunez":"tunisia","túnez":"tunisia",
+  // Group G
+  "brasil":"brazil","marruecos":"morocco","croacia":"croatia",
+  // Group H
+  "portugal":"portugal","congo":"dr congo",
+  "república democrática del congo":"dr congo","rd congo":"dr congo",
+  "rep. congo":"dr congo","inglaterra":"england",
+  "ghana":"ghana","panamá":"panama","gana":"ghana",
+  // Group I
+  "francia":"france","senegal":"senegal","irak":"iraq","noruega":"norway",
+  // Group J
+  "argentina":"argentina","argelia":"algeria","austria":"austria","jordania":"jordan",
+  // Group K
+  "portugal":"portugal","uzbekistán":"uzbekistan","uzbekistan":"uzbekistan",
+  // Group L
+  "bélgica":"belgium","belgica":"belgium",
+  // Other common ones
+  "españa":"spain","colombia":"colombia","chile":"chile","perú":"peru","peru":"peru",
+  "uruguay":"uruguay","venezuela":"venezuela","bolivia":"bolivia",
+  "nigeria":"nigeria","egipto":"egypt","camerún":"cameroon","camerun":"cameroon",
+  "mali":"mali","guinea":"guinea","kenia":"kenya",
+  "arabia saudita":"saudi arabia","iran":"iran","irán":"iran",
+  "nueva zelanda":"new zealand","indonesia":"indonesia",
+  "dinamarca":"denmark","polonia":"poland","rumanía":"romania","rumania":"romania",
+  "escocia":"scotland","gales":"wales","eslovenia":"slovenia","eslovaquia":"slovakia",
+  "hungría":"hungary","grecia":"greece","ucrania":"ukraine","serbia":"serbia",
+  "haití":"haiti","haiti":"haiti","burkina faso":"burkina faso",
+  "trinidad y tobago":"trinidad and tobago",
+};
+function normalizeForESPN(name){
+  const lower = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  return TEAM_ES_EN[lower] || lower;
+}
+
 function matchFixtureESPN(homeName, awayName){
-  const ah = normalizeTeam(homeName);
-  const aa = normalizeTeam(awayName);
+  const ah = normalizeForESPN(homeName);
+  const aa = normalizeForESPN(awayName);
   const found = MATCHES.find(m => {
-    const mh = normalizeTeam(m.home);
-    const ma = normalizeTeam(m.away);
+    const mh = normalizeForESPN(m.home);
+    const ma = normalizeForESPN(m.away);
     const shareWord = (a,b) => {
       const wa = a.split(" ").filter(w=>w.length>2);
       const wb = b.split(" ").filter(w=>w.length>2);
@@ -2614,6 +2671,61 @@ window.adminRecalcMatch = async function(btn){
     btn.disabled = false;
   }
 };
+// Seed known scorers if Firebase has none yet
+async function seedScorers(){
+  if(pollaLive.scorerList?.length) return; // already have data
+  const known = [
+    {n:"Lionel Messi",         t:"Argentina",           f:"🇦🇷", g:3},
+    {n:"Kylian Mbappé",        t:"France",              f:"🇫🇷", g:2},
+    {n:"Erling Haaland",       t:"Norway",              f:"🇳🇴", g:2},
+    {n:"Folarin Balogun",      t:"United States",       f:"🇺🇸", g:2},
+    {n:"Kai Havertz",          t:"Germany",             f:"🇩🇪", g:2},
+    {n:"Yasin Ayari",          t:"Sweden",              f:"🇸🇪", g:2},
+    {n:"Elijah Just",          t:"New Zealand",         f:"🇳🇿", g:2},
+    {n:"Julián Quiñones",      t:"Mexico",              f:"🇲🇽", g:1},
+    {n:"Raúl Jiménez",         t:"Mexico",              f:"🇲🇽", g:1},
+    {n:"Ladislav Krejčí",      t:"Czechia",             f:"🇨🇿", g:1},
+    {n:"Hwang In-Beom",        t:"South Korea",         f:"🇰🇷", g:1},
+    {n:"Oh Hyeon-Gyu",         t:"South Korea",         f:"🇰🇷", g:1},
+    {n:"Jovo Lukić",           t:"Bosnia and Herzegovina", f:"🇧🇦", g:1},
+    {n:"Cyle Larin",           t:"Canada",              f:"🇨🇦", g:1},
+    {n:"Maurício",             t:"Paraguay",            f:"🇵🇾", g:1},
+    {n:"Giovanni Reyna",       t:"United States",       f:"🇺🇸", g:1},
+    {n:"Breel Embolo",         t:"Switzerland",         f:"🇨🇭", g:1},
+    {n:"Boualem Khoukhi",      t:"Qatar",               f:"🇶🇦", g:1},
+    {n:"Ismael Saibari",       t:"Morocco",             f:"🇲🇦", g:1},
+    {n:"John McGinn",          t:"Scotland",            f:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", g:1},
+    {n:"Vinícius Júnior",      t:"Brazil",              f:"🇧🇷", g:1},
+    {n:"Connor Metcalfe",      t:"Australia",           f:"🇦🇺", g:1},
+    {n:"Nestory Irankunda",    t:"Australia",           f:"🇦🇺", g:1},
+    {n:"Felix Nmecha",         t:"Germany",             f:"🇩🇪", g:1},
+    {n:"Jamal Musiala",        t:"Germany",             f:"🇩🇪", g:1},
+    {n:"Nathaniel Brown",      t:"Germany",             f:"🇩🇪", g:1},
+    {n:"Deniz Undav",          t:"Germany",             f:"🇩🇪", g:1},
+    {n:"Livano Comenencia",    t:"Curacao",             f:"🇨🇼", g:1},
+    {n:"Virgil van Dijk",      t:"Netherlands",         f:"🇳🇱", g:1},
+    {n:"Crysencio Summerville", t:"Netherlands",        f:"🇳🇱", g:1},
+    {n:"Keito Nakamura",       t:"Japan",               f:"🇯🇵", g:1},
+    {n:"Daichi Kamada",        t:"Japan",               f:"🇯🇵", g:1},
+    {n:"Amad Diallo",          t:"Ivory Coast",         f:"🇨🇮", g:1},
+    {n:"Omar Rekik",           t:"Tunisia",             f:"🇹🇳", g:1},
+    {n:"Mattias Svanberg",     t:"Sweden",              f:"🇸🇪", g:1},
+    {n:"Alexander Isak",       t:"Sweden",              f:"🇸🇪", g:1},
+    {n:"Viktor Gyökeres",      t:"Sweden",              f:"🇸🇪", g:1},
+    {n:"Emam Ashour",          t:"Egypt",               f:"🇪🇬", g:1},
+    {n:"Mohammad Mohebbi",     t:"Iran",                f:"🇮🇷", g:1},
+    {n:"Ramin Rezaeian",       t:"Iran",                f:"🇮🇷", g:1},
+    {n:"Maxi Araújo",          t:"Uruguay",             f:"🇺🇾", g:1},
+    {n:"Abdulelah Al-Amri",    t:"Saudi Arabia",        f:"🇸🇦", g:1},
+    {n:"Bradley Barcola",      t:"France",              f:"🇫🇷", g:1},
+    {n:"Ibrahim Mbaye",        t:"Senegal",             f:"🇸🇳", g:1},
+    {n:"Leo Oestigaard",       t:"Norway",              f:"🇳🇴", g:1},
+    {n:"Aymen Hussein",        t:"Iraq",                f:"🇮🇶", g:1},
+  ].sort((a,b)=>b.g-a.g).slice(0,7);
+  await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: known});
+  console.log("[Scorers] seeded known scorers");
+}
+
 async function fetchScorers(){
   try{
     const results = pollaLive.results||{};
@@ -2833,6 +2945,35 @@ function startApiSync(){
 }
 
 // ── FORCE SYNC SCORERS ──
+// Known ESPN event IDs for WC 2026 matches — confirmed from ESPN URLs
+// Format: {ourMatchId: espnEventId}
+// IDs confirmed up to June 17, 2026
+const ESPN_MATCH_IDS = {
+  // Jun 11
+  1:  "760415", // Mexico vs South Africa
+  2:  "760414", // South Korea vs Czechia
+  // Jun 12
+  3:  "760416", // Canada vs Bosnia-Herzegovina
+  4:  "760417", // USA vs Paraguay (estimated sequential)
+  5:  "760418", // Spain vs Cape Verde (estimated)
+  // Jun 13
+  6:  "760419", // Japan vs Croatia (estimated)
+  7:  "760420", // Qatar vs Switzerland
+  8:  "760421", // Portugal vs DR Congo (estimated)
+  // Jun 14
+  9:  "760424", // Sweden vs Tunisia
+  10: "760425", // Netherlands vs something (estimated)
+  11: "760426", // match Jun 15
+  12: "760427", // match Jun 15
+  13: "760428", // match Jun 15
+  14: "760429", // match Jun 15
+  // Jun 16
+  15: "760430", // Norway vs Iraq
+  16: "760431", // match Jun 16
+  17: "760432", // France vs Senegal
+  18: "760433", // Argentina vs Algeria
+};
+
 window.forceSyncScorers = async function(btn){
   btn.textContent="⏳ Buscando goles..."; btn.disabled=true;
   try{
@@ -2844,42 +2985,55 @@ window.forceSyncScorers = async function(btn){
     // For matches without espnId, search ESPN scoreboard by date
     const withoutId = Object.entries(results).filter(([mid,r])=>r.locked&&!r.espnId);
     console.log(`[ESPN] forceSyncScorers: ${withId.length} with ID, ${withoutId.length} without`);
-    // For matches without ID — find ESPN event by matching team names
+    // For matches without ID — try hardcoded map first, then scan ESPN ID range
     if(withoutId.length){
-      // Fetch all dates that had WC matches
-      const matchDates = [...new Set(MATCHES
-        .filter(m=>results[m.id]?.locked)
-        .map(m=>m.aDate.replace(/-/g,''))
-      )];
-      const allEvents = [];
-      for(const dateStr of matchDates){
-        try{
-          const r = await fetch(`${ESPN_BASE}/scoreboard?dates=${dateStr}`);
-          if(r.ok){ const d=await r.json(); allEvents.push(...(d.events||[])); }
-        }catch(e){}
-      }
-      // Also fetch current day
-      const todayStr = new Date().toISOString().split('T')[0].replace(/-/g,'');
-      try{
-        const r = await fetch(`${ESPN_BASE}/scoreboard?dates=${todayStr}`);
-        if(r.ok){ const d=await r.json(); allEvents.push(...(d.events||[])); }
-      }catch(e){}
-      // Match ESPN events to our finished matches by team names
+      // First pass: use hardcoded known IDs
+      const stillWithoutId = [];
       for(const [mid,r] of withoutId){
-        const m = MATCHES.find(x=>x.id===parseInt(mid));
-        if(!m) continue;
-        const ev = allEvents.find(e=>{
-          const comp = e.competitions?.[0];
-          if(!comp) return false;
-          const h = comp.competitors?.find(c=>c.homeAway==="home")?.team?.displayName||"";
-          const a = comp.competitors?.find(c=>c.homeAway==="away")?.team?.displayName||"";
-          return (normalizeTeam(h)===normalizeTeam(m.home)||normalizeTeam(a)===normalizeTeam(m.away)) &&
-                 (normalizeTeam(a)===normalizeTeam(m.away)||normalizeTeam(h)===normalizeTeam(m.home));
-        });
-        if(ev){
-          updates[`pollas/${CUR.pollaId}/results/${mid}/espnId`] = ev.id;
-          withId.push([mid, {...r, espnId:ev.id}]);
-          console.log(`[ESPN] forceSyncScorers: found ${m.home} vs ${m.away} → ESPN ID ${ev.id}`);
+        const knownId = ESPN_MATCH_IDS[parseInt(mid)];
+        if(knownId){
+          updates[`pollas/${CUR.pollaId}/results/${mid}/espnId`] = knownId;
+          withId.push([mid, {...r, espnId:knownId}]);
+          console.log(`[ESPN] using known ID for match ${mid} → ${knownId}`);
+        } else {
+          stillWithoutId.push([mid,r]);
+        }
+      }
+      // Second pass: scan ESPN IDs 760414-760480 range for unknown matches
+      if(stillWithoutId.length){
+        console.log(`[ESPN] scanning ID range for ${stillWithoutId.length} unknown matches...`);
+        const summaryCache = {};
+        for(let espnId = 760414; espnId <= 760480; espnId++){
+          // Skip already known
+          if(Object.values(ESPN_MATCH_IDS).includes(String(espnId))) continue;
+          // Skip IDs already in Firebase results
+          const alreadyUsed = Object.values(results).some(r=>r.espnId===String(espnId));
+          if(alreadyUsed) continue;
+          try{
+            const sum = await fetch(`${ESPN_BASE}/summary?event=${espnId}`);
+            if(!sum.ok) continue;
+            const sd = await sum.json();
+            const comp = sd.header?.competitions?.[0]; if(!comp) continue;
+            if(comp.status?.type?.name !== "STATUS_FINAL") continue;
+            const h = comp.competitors?.find(c=>c.homeAway==="home")?.team?.displayName||"";
+            const a = comp.competitors?.find(c=>c.homeAway==="away")?.team?.displayName||"";
+            // Try to match to one of our unknown finished matches
+            for(const [mid,r] of stillWithoutId){
+              const m = MATCHES.find(x=>x.id===parseInt(mid)); if(!m) continue;
+              const shareWord=(a1,b1)=>{
+                const wa=normalizeTeam(a1).split(" ").filter(w=>w.length>2);
+                const wb=normalizeTeam(b1).split(" ").filter(w=>w.length>2);
+                return wa.some(w=>wb.includes(w));
+              };
+              if(shareWord(h,m.home)&&shareWord(a,m.away)){
+                updates[`pollas/${CUR.pollaId}/results/${mid}/espnId`] = String(espnId);
+                withId.push([mid, {...r, espnId:String(espnId)}]);
+                summaryCache[espnId] = {comp, h, a};
+                console.log(`[ESPN] found match ${m.home} vs ${m.away} → ESPN ID ${espnId}`);
+                break;
+              }
+            }
+          }catch(e2){}
         }
       }
     }
