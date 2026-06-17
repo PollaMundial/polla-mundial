@@ -2762,21 +2762,23 @@ function smartApiSync(){
 
 function startApiSync(){
   // Any member with the app open syncs the API.
-  // We use a Firebase timestamp to avoid duplicate calls —
-  // if someone already synced in the last 3 min, skip.
+  // ESPN API has no limits — sync every 1 min during live matches, 5 min otherwise.
+  // Firebase timestamp prevents duplicate calls when multiple users are connected.
   apiTimer = setInterval(()=>{
     if(!todayHasMatches()) return;
+    const results = pollaLive.results||{};
+    const hasLive = MATCHES.some(m=>results[m.id]?.live);
+    const threshold = hasLive ? 60*1000 : 5*60*1000; // 1 min live, 5 min otherwise
     get(ref(db,"pollas/"+CUR.pollaId+"/lastServerSync")).then(snap=>{
       const lastSync = snap.val()||0;
-      const stale = Date.now() - lastSync > 10*60*1000; // 10 min threshold
+      const stale = Date.now() - lastSync > threshold;
       if(stale){
-        // Claim the sync slot immediately to prevent race with other members
         update(ref(db,"pollas/"+CUR.pollaId),{lastServerSync: Date.now()}).then(()=>{
           smartApiSync();
         }).catch(()=>{});
       }
     }).catch(()=>{ smartApiSync(); });
-  }, 10*60*1000);
+  }, 60*1000); // check every minute
 }
 
 // ── MULTI-POLLA PANEL ──
