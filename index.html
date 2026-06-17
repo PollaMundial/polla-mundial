@@ -1254,6 +1254,8 @@ function startApp(){
   subscribeFirebase();
   startApiSync();
   startAutoLiveCheck();
+  // Call immediately on page load — don't wait for the interval
+  if(todayHasMatches()) fetchLive();
   showTab("partidos",document.querySelector(".tab"));
 }
 
@@ -2954,7 +2956,7 @@ function startApiSync(){
     if(!todayHasMatches()) return;
     const results = pollaLive.results||{};
     const hasLive = MATCHES.some(m=>results[m.id]?.live);
-    const threshold = hasLive ? 60*1000 : 5*60*1000; // 1 min live, 5 min otherwise
+    const threshold = hasLive ? 15*1000 : 5*60*1000; // 15s live, 5 min otherwise
     get(ref(db,"pollas/"+CUR.pollaId+"/lastServerSync")).then(snap=>{
       const lastSync = snap.val()||0;
       const stale = Date.now() - lastSync > threshold;
@@ -2964,7 +2966,7 @@ function startApiSync(){
         }).catch(()=>{});
       }
     }).catch(()=>{ smartApiSync(); });
-  }, 60*1000); // check every minute
+  }, 15*1000); // check every 15s
 }
 
 // ── FORCE SYNC SCORERS ──
@@ -3309,6 +3311,13 @@ function startAutoLiveCheck(){
     }
   }, 30*1000);
 }
+
+// Call fetchLive when user returns to the tab
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible" && CUR.pollaId && todayHasMatches()){
+    fetchLive();
+  }
+});
 
 // ── INPUT HANDLERS ──
 document.getElementById("inp-email")?.addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("inp-pass")?.focus();});
