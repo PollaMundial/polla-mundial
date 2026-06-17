@@ -2266,10 +2266,14 @@ async function fetchLive(){
       console.log(`[ESPN] ${ev.name}: ${status} live:${isLive} done:${isDone} ${h}-${a}`);
       if(isLive){
         liveCount++;
-        updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
+        // Try to auto-answer question in real time (provisional — may update again)
+        const liveQr = await autoAnswerQuestion(ev.id, mid);
+        const liveUpdate = {
           h, a, live:true, locked:false, min:Math.round(min/60)||0,
           homeTeam:homeName, awayTeam:awayName, espnId:ev.id
         };
+        if(liveQr) liveUpdate.qr = liveQr;
+        updates[`pollas/${CUR.pollaId}/results/${mid}`] = liveUpdate;
       } else if(isDone){
         finishedCount++;
         const cur = pollaLive.results?.[mid];
