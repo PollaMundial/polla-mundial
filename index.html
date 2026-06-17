@@ -2259,8 +2259,9 @@ async function fetchLive(){
       const h = parseInt(home.score)||0;
       const a = parseInt(away.score)||0;
       const min = comp.status?.clock||0;
-      const isLive = status === "STATUS_IN_PROGRESS" || status === "STATUS_HALFTIME";
-      const isDone = status === "STATUS_FINAL" || status === "STATUS_FULL_TIME";
+      const isLive = ["STATUS_IN_PROGRESS","STATUS_HALFTIME","STATUS_END_PERIOD","STATUS_FIRST_HALF","STATUS_SECOND_HALF"].includes(status)||(status.includes("PROGRESS")||status.includes("HALF"));
+      const isDone = ["STATUS_FINAL","STATUS_FULL_TIME","STATUS_FINAL_AET","STATUS_FINAL_PEN"].includes(status)||status.includes("FINAL");
+      console.log(`[ESPN] ${ev.name}: ${status} live:${isLive} done:${isDone} ${h}-${a}`);
       if(isLive){
         liveCount++;
         updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
@@ -2538,9 +2539,9 @@ window.testApiConnection = async function(btn){
     if(!res.ok){ result.innerHTML=`❌ HTTP ${res.status}`; setApiBadge(false,`HTTP ${res.status}`); btn.textContent='🔌 Verificar conexión API'; btn.disabled=false; return; }
     const data = await res.json();
     const events = data.events||[];
-    const live = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_IN_PROGRESS").length;
-    const finished = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_FINAL").length;
-    const scheduled = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_SCHEDULED").length;
+    const live = events.filter(e=>{ const s=e.competitions?.[0]?.status?.type?.name||""; return s.includes("PROGRESS")||s.includes("HALF"); }).length;
+    const finished = events.filter(e=>{ const s=e.competitions?.[0]?.status?.type?.name||""; return s.includes("FINAL"); }).length;
+    const scheduled = events.filter(e=>{ const s=e.competitions?.[0]?.status?.type?.name||""; return s.includes("SCHEDULED"); }).length;
     result.innerHTML=`✅ ESPN API conectada — sin auth, sin límites<br>Partidos (ayer/hoy/mañana): <strong>${events.length}</strong><br>En vivo: <strong>${live}</strong> · Finalizados: <strong>${finished}</strong> · Programados: <strong>${scheduled}</strong>`;
     setApiBadge(true, `${events.length} partidos`);
   }catch(e){
@@ -2671,60 +2672,66 @@ window.adminRecalcMatch = async function(btn){
     btn.disabled = false;
   }
 };
-// Seed known scorers if Firebase has none yet
-async function seedScorers(){
-  if(pollaLive.scorerList?.length) return; // already have data
-  const known = [
-    {n:"Lionel Messi",         t:"Argentina",           f:"🇦🇷", g:3},
-    {n:"Kylian Mbappé",        t:"France",              f:"🇫🇷", g:2},
-    {n:"Erling Haaland",       t:"Norway",              f:"🇳🇴", g:2},
-    {n:"Folarin Balogun",      t:"United States",       f:"🇺🇸", g:2},
-    {n:"Kai Havertz",          t:"Germany",             f:"🇩🇪", g:2},
-    {n:"Yasin Ayari",          t:"Sweden",              f:"🇸🇪", g:2},
-    {n:"Elijah Just",          t:"New Zealand",         f:"🇳🇿", g:2},
-    {n:"Julián Quiñones",      t:"Mexico",              f:"🇲🇽", g:1},
-    {n:"Raúl Jiménez",         t:"Mexico",              f:"🇲🇽", g:1},
-    {n:"Ladislav Krejčí",      t:"Czechia",             f:"🇨🇿", g:1},
-    {n:"Hwang In-Beom",        t:"South Korea",         f:"🇰🇷", g:1},
-    {n:"Oh Hyeon-Gyu",         t:"South Korea",         f:"🇰🇷", g:1},
+// Manual scorer list — source of truth until ESPN takes over
+const MANUAL_SCORERS = [
+    {n:"Lionel Messi",         t:"Argentina",              f:"🇦🇷", g:3},
+    {n:"Kylian Mbappé",        t:"France",                 f:"🇫🇷", g:2},
+    {n:"Erling Haaland",       t:"Norway",                 f:"🇳🇴", g:2},
+    {n:"Folarin Balogun",      t:"United States",          f:"🇺🇸", g:2},
+    {n:"Kai Havertz",          t:"Germany",                f:"🇩🇪", g:2},
+    {n:"Yasin Ayari",          t:"Sweden",                 f:"🇸🇪", g:2},
+    {n:"Elijah Just",          t:"New Zealand",            f:"🇳🇿", g:2},
+    {n:"Julián Quiñones",      t:"Mexico",                 f:"🇲🇽", g:1},
+    {n:"Raúl Jiménez",         t:"Mexico",                 f:"🇲🇽", g:1},
+    {n:"Ladislav Krejčí",      t:"Czechia",                f:"🇨🇿", g:1},
+    {n:"Hwang In-Beom",        t:"South Korea",            f:"🇰🇷", g:1},
+    {n:"Oh Hyeon-Gyu",         t:"South Korea",            f:"🇰🇷", g:1},
     {n:"Jovo Lukić",           t:"Bosnia and Herzegovina", f:"🇧🇦", g:1},
-    {n:"Cyle Larin",           t:"Canada",              f:"🇨🇦", g:1},
-    {n:"Maurício",             t:"Paraguay",            f:"🇵🇾", g:1},
-    {n:"Giovanni Reyna",       t:"United States",       f:"🇺🇸", g:1},
-    {n:"Breel Embolo",         t:"Switzerland",         f:"🇨🇭", g:1},
-    {n:"Boualem Khoukhi",      t:"Qatar",               f:"🇶🇦", g:1},
-    {n:"Ismael Saibari",       t:"Morocco",             f:"🇲🇦", g:1},
-    {n:"John McGinn",          t:"Scotland",            f:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", g:1},
-    {n:"Vinícius Júnior",      t:"Brazil",              f:"🇧🇷", g:1},
-    {n:"Connor Metcalfe",      t:"Australia",           f:"🇦🇺", g:1},
-    {n:"Nestory Irankunda",    t:"Australia",           f:"🇦🇺", g:1},
-    {n:"Felix Nmecha",         t:"Germany",             f:"🇩🇪", g:1},
-    {n:"Jamal Musiala",        t:"Germany",             f:"🇩🇪", g:1},
-    {n:"Nathaniel Brown",      t:"Germany",             f:"🇩🇪", g:1},
-    {n:"Deniz Undav",          t:"Germany",             f:"🇩🇪", g:1},
-    {n:"Livano Comenencia",    t:"Curacao",             f:"🇨🇼", g:1},
-    {n:"Virgil van Dijk",      t:"Netherlands",         f:"🇳🇱", g:1},
-    {n:"Crysencio Summerville", t:"Netherlands",        f:"🇳🇱", g:1},
-    {n:"Keito Nakamura",       t:"Japan",               f:"🇯🇵", g:1},
-    {n:"Daichi Kamada",        t:"Japan",               f:"🇯🇵", g:1},
-    {n:"Amad Diallo",          t:"Ivory Coast",         f:"🇨🇮", g:1},
-    {n:"Omar Rekik",           t:"Tunisia",             f:"🇹🇳", g:1},
-    {n:"Mattias Svanberg",     t:"Sweden",              f:"🇸🇪", g:1},
-    {n:"Alexander Isak",       t:"Sweden",              f:"🇸🇪", g:1},
-    {n:"Viktor Gyökeres",      t:"Sweden",              f:"🇸🇪", g:1},
-    {n:"Emam Ashour",          t:"Egypt",               f:"🇪🇬", g:1},
-    {n:"Mohammad Mohebbi",     t:"Iran",                f:"🇮🇷", g:1},
-    {n:"Ramin Rezaeian",       t:"Iran",                f:"🇮🇷", g:1},
-    {n:"Maxi Araújo",          t:"Uruguay",             f:"🇺🇾", g:1},
-    {n:"Abdulelah Al-Amri",    t:"Saudi Arabia",        f:"🇸🇦", g:1},
-    {n:"Bradley Barcola",      t:"France",              f:"🇫🇷", g:1},
-    {n:"Ibrahim Mbaye",        t:"Senegal",             f:"🇸🇳", g:1},
-    {n:"Leo Oestigaard",       t:"Norway",              f:"🇳🇴", g:1},
-    {n:"Aymen Hussein",        t:"Iraq",                f:"🇮🇶", g:1},
-  ].sort((a,b)=>b.g-a.g).slice(0,7);
-  await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: known});
-  console.log("[Scorers] seeded known scorers");
+    {n:"Cyle Larin",           t:"Canada",                 f:"🇨🇦", g:1},
+    {n:"Maurício",             t:"Paraguay",               f:"🇵🇾", g:1},
+    {n:"Giovanni Reyna",       t:"United States",          f:"🇺🇸", g:1},
+    {n:"Breel Embolo",         t:"Switzerland",            f:"🇨🇭", g:1},
+    {n:"Boualem Khoukhi",      t:"Qatar",                  f:"🇶🇦", g:1},
+    {n:"Ismael Saibari",       t:"Morocco",                f:"🇲🇦", g:1},
+    {n:"John McGinn",          t:"Scotland",               f:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", g:1},
+    {n:"Vinícius Júnior",      t:"Brazil",                 f:"🇧🇷", g:1},
+    {n:"Connor Metcalfe",      t:"Australia",              f:"🇦🇺", g:1},
+    {n:"Nestory Irankunda",    t:"Australia",              f:"🇦🇺", g:1},
+    {n:"Felix Nmecha",         t:"Germany",                f:"🇩🇪", g:1},
+    {n:"Jamal Musiala",        t:"Germany",                f:"🇩🇪", g:1},
+    {n:"Nathaniel Brown",      t:"Germany",                f:"🇩🇪", g:1},
+    {n:"Deniz Undav",          t:"Germany",                f:"🇩🇪", g:1},
+    {n:"Livano Comenencia",    t:"Curacao",                f:"🇨🇼", g:1},
+    {n:"Virgil van Dijk",      t:"Netherlands",            f:"🇳🇱", g:1},
+    {n:"Crysencio Summerville",t:"Netherlands",            f:"🇳🇱", g:1},
+    {n:"Keito Nakamura",       t:"Japan",                  f:"🇯🇵", g:1},
+    {n:"Daichi Kamada",        t:"Japan",                  f:"🇯🇵", g:1},
+    {n:"Amad Diallo",          t:"Ivory Coast",            f:"🇨🇮", g:1},
+    {n:"Omar Rekik",           t:"Tunisia",                f:"🇹🇳", g:1},
+    {n:"Mattias Svanberg",     t:"Sweden",                 f:"🇸🇪", g:1},
+    {n:"Alexander Isak",       t:"Sweden",                 f:"🇸🇪", g:1},
+    {n:"Viktor Gyökeres",      t:"Sweden",                 f:"🇸🇪", g:1},
+    {n:"Emam Ashour",          t:"Egypt",                  f:"🇪🇬", g:1},
+    {n:"Mohammad Mohebbi",     t:"Iran",                   f:"🇮🇷", g:1},
+    {n:"Ramin Rezaeian",       t:"Iran",                   f:"🇮🇷", g:1},
+    {n:"Maxi Araújo",          t:"Uruguay",                f:"🇺🇾", g:1},
+    {n:"Abdulelah Al-Amri",    t:"Saudi Arabia",           f:"🇸🇦", g:1},
+    {n:"Bradley Barcola",      t:"France",                 f:"🇫🇷", g:1},
+    {n:"Ibrahim Mbaye",        t:"Senegal",                f:"🇸🇳", g:1},
+    {n:"Leo Oestigaard",       t:"Norway",                 f:"🇳🇴", g:1},
+    {n:"Aymen Hussein",        t:"Iraq",                   f:"🇮🇶", g:1},
+];
+
+// Normalize name for deduplication — removes accents, lowercase
+function normName(s){ return s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim(); }
+
+// Seed known scorers — always write manual list to Firebase as baseline
+async function seedScorers(){
+  // Always write the full manual list to Firebase as baseline
+  await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: [...MANUAL_SCORERS].sort((a,b)=>b.g-a.g)});
+  console.log("[Scorers] seeded", MANUAL_SCORERS.length, "scorers");
 }
+
 
 async function fetchScorers(){
   try{
@@ -2756,10 +2763,26 @@ async function fetchScorers(){
         }
       }catch(e2){ console.warn("[ESPN] summary error for event "+r.espnId+":", e2.message); }
     }
-    const scorerList = Object.values(scorerMap).sort((a,b)=>b.g-a.g).slice(0,30);
+    // Merge ESPN data with manual list — ESPN data takes priority for matching names
+    const mergedMap = {};
+    // Start with manual list as base
+    MANUAL_SCORERS.forEach(s => { mergedMap[normName(s.n)] = {...s}; });
+    // Override/update with ESPN data
+    Object.values(scorerMap).forEach(s => {
+      const key = normName(s.n);
+      if(mergedMap[key]){
+        // Found match — update goals and keep our flag/name formatting
+        mergedMap[key].g = s.g;
+        if(s.f && s.f !== "🏳️") mergedMap[key].f = s.f;
+      } else {
+        // New player from ESPN not in manual list — add them
+        mergedMap[key] = s;
+      }
+    });
+    const scorerList = Object.values(mergedMap).sort((a,b)=>b.g-a.g);
     if(scorerList.length){
       await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
-      console.log(`[ESPN] fetchScorers saved: ${scorerList.length} scorers`);
+      console.log(`[ESPN] fetchScorers saved: ${scorerList.length} scorers (merged)`);
     } else {
       console.log("[ESPN] fetchScorers: no goals found yet");
     }
