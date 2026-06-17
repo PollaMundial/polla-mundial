@@ -708,9 +708,8 @@ const FB = {
   messagingSenderId:"834459945548",
   appId:"1:834459945548:web:9147ca0e48dd1e2a82c2e9"
 };
-const API_KEY = "1999018bedd94885b93e17c5d69ff766"; // football-data.org
-const API_BASE_FD = "/api/football?path="; // Vercel proxy — avoids CORS
-const FD_HEADERS = {}; // token handled server-side in the proxy
+// ESPN public API — no auth, no CORS, free forever
+const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world";
 // Firebase Security Rules required:
 // - users/$uid: read/write only by $uid
 // - polla_info/$pollaId: read by any authenticated user (for joining)
@@ -718,7 +717,7 @@ const FD_HEADERS = {}; // token handled server-side in the proxy
 // - pollas/$pollaId/members/$uid: write by $uid (own entry) or owner
 // - pollas/$pollaId/results: write by owner only
 // See Firebase Console > Realtime Database > Rules
-// football-data.org API active
+// ESPN public API (no auth)
 
 /* ─────────────────────────────────────────────────────────────────
    FIREBASE REALTIME DATABASE — REGLAS DE SEGURIDAD
@@ -2209,66 +2208,203 @@ window.savePollaName=async function(){
 // ── API AUTO-SYNC ──
 async function fetchLive(){
   try{
-    // football-data.org: GET /v4/competitions/WC/matches?status=IN_PLAY
-    const res = await fetch(`${API_BASE_FD}competitions/WC/matches?status=IN_PLAY`);
-    if(!res.ok){
-      setApiBadge(false, `HTTP ${res.status}`);
-      console.warn("[API] fetchLive HTTP error:", res.status);
-      return;
-    }
+    const res = await fetch(`${ESPN_BASE}/scoreboard`);
+    if(!res.ok){ setApiBadge(false, `HTTP ${res.status}`); return; }
     const data = await res.json();
-    const matches = data.matches || [];
-    console.log(`[API] fetchLive OK: ${matches.length} live matches`);
-    setApiBadge(true, `${matches.length} en vivo`);
-    if(!matches.length){
-      fetchTodayFinished();
-      return;
-    }
+    const events = data.events || [];
+    console.log(`[ESPN] fetchLive: ${events.length} events today`);
+    let liveCount = 0, finishedCount = 0;
     const updates = {};
-    for(const fix of matches){
-      const mid = matchFixtureFD(fix); if(!mid) continue;
-      const h = fix.score?.fullTime?.home ?? fix.score?.halfTime?.home ?? 0;
-      const a = fix.score?.fullTime?.away ?? fix.score?.halfTime?.away ?? 0;
-      const min = fix.minute || 0;
-      updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
-        h, a, live: true, locked: false, min,
-        homeTeam: fix.homeTeam.name, awayTeam: fix.awayTeam.name
-      };
+    const finishedWithQr = [];
+    for(const ev of events){
+      const comp = ev.competitions?.[0]; if(!comp) continue;
+      const status = comp.status?.type?.name || "";
+      const home = comp.competitors?.find(c=>c.homeAway==="home");
+      const away = comp.competitors?.find(c=>c.homeAway==="away");
+      if(!home||!away) continue;
+      const homeName = home.team.displayName;
+      const awayName = away.team.displayName;
+      const mid = matchFixtureESPN(homeName, awayName);
+      if(!mid) continue;
+      const h = parseInt(home.score)||0;
+      const a = parseInt(away.score)||0;
+      const min = comp.status?.clock||0;
+      const isLive = status === "STATUS_IN_PROGRESS" || status === "STATUS_HALFTIME";
+      const isDone = status === "STATUS_FINAL" || status === "STATUS_FULL_TIME";
+      if(isLive){
+        liveCount++;
+        updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
+          h, a, live:true, locked:false, min:Math.round(min/60)||0,
+          homeTeam:homeName, awayTeam:awayName
+        };
+      } else if(isDone){
+        finishedCount++;
+        const cur = pollaLive.results?.[mid];
+        if(!cur?.locked){
+          // Try to auto-answer the extra question
+          const qr = await autoAnswerQuestion(ev.id, mid);
+          updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
+            h, a, live:false, locked:true,
+            homeTeam:homeName, awayTeam:awayName,
+            ...(qr ? {qr} : {})
+          };
+          finishedWithQr.push({mid, h, a, qr});
+        }
+      }
     }
+    setApiBadge(true, `${liveCount} en vivo · ${finishedCount} finalizados`);
+    console.log(`[ESPN] ${liveCount} live, ${finishedCount} finished`);
     if(Object.keys(updates).length) await update(ref(db,"/"), updates);
+    // Calc points for newly finished matches that have qr
+    for(const {mid, h, a, qr} of finishedWithQr){
+      const cur = pollaLive.results?.[mid];
+      if(!cur?.ptsAwarded && qr){
+        await calcPoints(mid, h, a, qr);
+      }
+    }
   }catch(e){
     setApiBadge(false, e.message);
-    console.warn("[API] fetchLive error:", e.message);
+    console.warn("[ESPN] fetchLive error:", e.message);
   }
 }
 
 async function fetchTodayFinished(){
-  try{
-    const today = new Date().toISOString().split('T')[0];
-    const res = await fetch(`${API_BASE_FD}competitions/WC/matches?dateFrom=${today}&dateTo=${today}&status=FINISHED`);
-    if(!res.ok) return;
-    const data = await res.json();
-    const matches = data.matches || [];
-    console.log(`[API] fetchTodayFinished: ${matches.length} finished today`);
-    for(const fix of matches){
-      const mid = matchFixtureFD(fix); if(!mid) continue;
-      const cur = pollaLive.results?.[mid];
-      if(cur?.locked) continue;
-      const h = fix.score?.fullTime?.home ?? 0;
-      const a = fix.score?.fullTime?.away ?? 0;
-      await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
-        h, a, live: false, locked: true,
-        homeTeam: fix.homeTeam.name, awayTeam: fix.awayTeam.name
-      });
-      try{ await calcPoints(mid, h, a, null); }catch(e){}
-    }
-  }catch(e){ console.warn("[API] fetchTodayFinished error:", e.message); }
+  // Not needed separately — fetchLive handles finished matches too
+  await fetchLive();
 }
 
-// Match fixture using football-data.org team names
-function matchFixtureFD(fix){
-  const ah = normalizeTeam(fix.homeTeam.name);
-  const aa = normalizeTeam(fix.awayTeam.name);
+// Auto-answer extra questions using ESPN match summary data
+async function autoAnswerQuestion(espnEventId, mid){
+  try{
+    const res = await fetch(`${ESPN_BASE}/summary?event=${espnEventId}`);
+    if(!res.ok) return null;
+    const data = await res.json();
+    const comp = data.header?.competitions?.[0];
+    if(!comp) return null;
+
+    const homeComp = comp.competitors?.find(c=>c.homeAway==="home");
+    const awayComp = comp.competitors?.find(c=>c.homeAway==="away");
+    const homeName = homeComp?.team?.displayName||"";
+    const awayName = awayComp?.team?.displayName||"";
+    const hScore = parseInt(homeComp?.score||0);
+    const aScore = parseInt(awayComp?.score||0);
+
+    // Get all play events
+    const plays = data.plays || [];
+    const goals = plays.filter(p=>p.scoringPlay);
+    const yellowCards = plays.filter(p=>p.type?.text?.toLowerCase().includes("yellow card"));
+    const redCards = plays.filter(p=>p.type?.text?.toLowerCase().includes("red card"));
+    const penalties = plays.filter(p=>p.type?.text?.toLowerCase().includes("penalty"));
+    const firstGoal = goals.length ? goals[0] : null;
+    const firstYellow = yellowCards.length ? yellowCards[0] : null;
+
+    // Also check details from scoreboard
+    const details = comp.details||[];
+    const allGoals = details.filter(d=>d.type?.text==="Goal"||d.type?.text==="Penalty - Scored");
+    const allYellows = details.filter(d=>d.type?.text==="Yellow Card");
+    const allReds = details.filter(d=>d.type?.text==="Red Card");
+    const allPens = details.filter(d=>d.type?.text==="Penalty - Scored"||d.type?.text==="Penalty - Missed");
+
+    const m = MATCHES.find(x=>x.id===mid); if(!m) return null;
+    const q = m.q.toLowerCase();
+    let qr = null;
+
+    // Match question to auto-answer
+    if(q.includes("anota primero")){
+      const fg = allGoals[0]||firstGoal;
+      if(fg){
+        const scorerTeam = fg.team?.displayName||fg.participants?.[0]?.athlete?.team?.displayName||"";
+        const normScorer = normalizeTeam(scorerTeam);
+        const normHome = normalizeTeam(homeName);
+        if(normScorer && normHome && (normScorer===normHome||normHome.split(" ").some(w=>w.length>2&&normScorer.includes(w)))){
+          qr = homeName;
+        } else {
+          qr = awayName;
+        }
+      }
+    }
+    else if(q.includes("1ª tarjeta amarilla")||q.includes("primera tarjeta amarilla")){
+      const fy = allYellows[0]||firstYellow;
+      if(fy){
+        const cardTeam = fy.team?.displayName||"";
+        const normCard = normalizeTeam(cardTeam);
+        const normHome = normalizeTeam(homeName);
+        if(normCard && normHome && (normCard===normHome||normHome.split(" ").some(w=>w.length>2&&normCard.includes(w)))){
+          qr = homeName;
+        } else {
+          qr = awayName;
+        }
+      }
+    }
+    else if(q.includes("tarjeta roja")){
+      qr = allReds.length > 0 ? "Sí" : "No";
+    }
+    else if(q.includes("primer tiempo")){
+      const firstHalf = allGoals.filter(g=>(g.clock?.value||999) <= 45*60);
+      qr = firstHalf.length > 0 ? "Sí" : "No";
+    }
+    else if(q.includes("segundo tiempo")){
+      const secondHalf = allGoals.filter(g=>(g.clock?.value||0) > 45*60);
+      qr = secondHalf.length > 0 ? "Sí" : "No";
+    }
+    else if(q.includes("primeros 15")){
+      const early = allGoals.filter(g=>(g.clock?.value||999) <= 15*60);
+      qr = early.length > 0 ? "Sí" : "No";
+    }
+    else if(q.includes("últimos 10")){
+      const late = allGoals.filter(g=>(g.clock?.value||0) >= 80*60);
+      qr = late.length > 0 ? "Sí" : "No";
+    }
+    else if(q.includes("ambos equipos anotan")){
+      qr = (hScore > 0 && aScore > 0) ? "Sí" : "No";
+    }
+    else if(q.includes("2+ goles de diferencia")||q.includes("2 o más goles")){
+      qr = Math.abs(hScore - aScore) >= 2 ? "Sí" : "No";
+    }
+    else if(q.includes("1.5")){
+      const total = hScore + aScore;
+      qr = total > 1.5 ? "Más de 1.5" : "Menos de 1.5";
+    }
+    else if(q.includes("3.5")){
+      const total = hScore + aScore;
+      qr = total > 3.5 ? "Más de 3.5" : "Menos de 3.5";
+    }
+    else if(q.includes("penal")){
+      qr = allPens.length > 0 ? "Sí" : "No";
+    }
+    else if(q.includes("prórroga")){
+      const status = comp.status?.type?.name||"";
+      qr = (status==="STATUS_FINAL_AET"||status.includes("AET")) ? "Sí" : "No";
+    }
+    else if(q.includes("tarjetas")&&q.includes("3.5")){
+      const total = allYellows.length + allReds.length;
+      qr = total > 3.5 ? "Más de 3.5" : "Menos de 3.5";
+    }
+    else if(q.includes("5") && q.includes("corner")){
+      // ESPN may have corner stats
+      const homeStats = homeComp?.statistics||[];
+      const corners = homeStats.find(s=>s.name==="cornerKicks");
+      const awayStats = awayComp?.statistics||[];
+      const awayCor = awayStats.find(s=>s.name==="cornerKicks");
+      if(corners||awayCor){
+        const total = parseInt(corners?.displayValue||0) + parseInt(awayCor?.displayValue||0);
+        qr = total > 5.5 ? "Sí" : "No";
+      }
+    }
+
+    if(qr){
+      console.log(`[ESPN] Auto-answer match ${mid}: "${m.q}" → "${qr}"`);
+    }
+    return qr;
+  }catch(e){
+    console.warn("[ESPN] autoAnswerQuestion error:", e.message);
+    return null;
+  }
+}
+
+function matchFixtureESPN(homeName, awayName){
+  const ah = normalizeTeam(homeName);
+  const aa = normalizeTeam(awayName);
   const found = MATCHES.find(m => {
     const mh = normalizeTeam(m.home);
     const ma = normalizeTeam(m.away);
@@ -2304,29 +2440,17 @@ window.testApiConnection = async function(btn){
   btn.textContent='⏳ Verificando...'; btn.disabled=true;
   const result = document.getElementById('api-test-result');
   result.style.display='block';
-  result.textContent='Conectando con football-data.org...';
+  result.textContent='Conectando con ESPN API...';
   try{
-    // Test: get today WC matches (free, costs 1 request)
-    const today = new Date().toISOString().split('T')[0];
-    const res = await fetch(`${API_BASE_FD}competitions/WC/matches?dateFrom=${today}&dateTo=${today}`);
-    if(!res.ok){
-      result.innerHTML=`❌ Error HTTP ${res.status} — verificá el token`;
-      setApiBadge(false, `HTTP ${res.status}`);
-      btn.textContent='🔌 Verificar conexión API'; btn.disabled=false;
-      return;
-    }
+    const res = await fetch(`${ESPN_BASE}/scoreboard`);
+    if(!res.ok){ result.innerHTML=`❌ HTTP ${res.status}`; setApiBadge(false,`HTTP ${res.status}`); btn.textContent='🔌 Verificar conexión API'; btn.disabled=false; return; }
     const data = await res.json();
-    if(data.errorCode){
-      result.innerHTML=`❌ Error: ${data.message}`;
-      setApiBadge(false, data.message);
-      btn.textContent='🔌 Verificar conexión API'; btn.disabled=false;
-      return;
-    }
-    const matchCount = data.matches?.length||0;
-    const liveCount = data.matches?.filter(m=>m.status==='IN_PLAY').length||0;
-    const finishedCount = data.matches?.filter(m=>m.status==='FINISHED').length||0;
-    result.innerHTML=`✅ football-data.org conectado<br>Partidos WC hoy: <strong>${matchCount}</strong><br>En vivo: <strong>${liveCount}</strong> · Finalizados: <strong>${finishedCount}</strong>`;
-    setApiBadge(true, `${matchCount} partidos hoy`);
+    const events = data.events||[];
+    const live = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_IN_PROGRESS").length;
+    const finished = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_FINAL").length;
+    const scheduled = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_SCHEDULED").length;
+    result.innerHTML=`✅ ESPN API conectada — sin auth, sin límites<br>Partidos hoy: <strong>${events.length}</strong><br>En vivo: <strong>${live}</strong> · Finalizados: <strong>${finished}</strong> · Programados: <strong>${scheduled}</strong>`;
+    setApiBadge(true, `${events.length} partidos hoy`);
   }catch(e){
     result.innerHTML=`❌ ${e.message}`;
     setApiBadge(false, e.message);
@@ -2457,23 +2581,31 @@ window.adminRecalcMatch = async function(btn){
 };
 async function fetchScorers(){
   try{
-    const res = await fetch(`${API_BASE_FD}competitions/WC/scorers?limit=30`);
+    // ESPN scorers endpoint for World Cup
+    const res = await fetch(`${ESPN_BASE}/scoreboard?limit=100`);
     if(!res.ok) return;
     const data = await res.json();
-    if(!data.scorers?.length) return;
-    const scorerList = data.scorers.map(item=>({
-      n: item.player.name,
-      t: item.team?.name||"",
-      g: item.goals?.goals||0
-    }));
-    await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
-    console.log(`[API] fetchScorers OK: ${scorerList.length} scorers`);
-  }catch(e){ console.warn("[API] fetchScorers error:", e.message); }
+    // Collect goal scorers from all completed events
+    const scorerMap = {};
+    for(const ev of data.events||[]){
+      const comp = ev.competitions?.[0]; if(!comp) continue;
+      for(const detail of comp.details||[]){
+        if(detail.type?.text==="Goal"||detail.type?.text==="Penalty - Scored"){
+          const name = detail.athletesInvolved?.[0]?.displayName;
+          const team = detail.team?.displayName||"";
+          if(name){ scorerMap[name]=(scorerMap[name]||{n:name,t:team,g:0}); scorerMap[name].g++; }
+        }
+      }
+    }
+    const scorerList = Object.values(scorerMap).sort((a,b)=>b.g-a.g).slice(0,30);
+    if(scorerList.length) await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
+    console.log(`[ESPN] fetchScorers: ${scorerList.length} scorers`);
+  }catch(e){ console.warn("[ESPN] fetchScorers error:", e.message); }
 }
 // ── AUTO BRACKET: update team names in knockout rounds from API ──
 async function fetchKnockoutTeams(){
   try{
-    const res = await fetch(`${API_BASE_FD}competitions/WC/matches?stage=ROUND_OF_32&status=FINISHED`);
+    const res = await fetch(`${ESPN_BASE}/scoreboard`);
     if(!res.ok) return;
     const data = await res.json();
     // Update knockout bracket from results
@@ -2525,7 +2657,7 @@ async function fetchTournamentResults(){
   try{
     // Get final standings — champion is the winner of the Final
     // Get the final match
-    const finalRes = await fetch(`${API_BASE_FD}competitions/WC/matches?stage=FINAL`);
+    const finalRes = await fetch(`${ESPN_BASE}/scoreboard`);
     if(!finalRes.ok) return;
     const finalData = await finalRes.json();
     const finalFix = (finalData.matches||[]).find(m=>m.status==="FINISHED");
@@ -2535,7 +2667,7 @@ async function fetchTournamentResults(){
     const champion = homeWon ? finalFix.homeTeam.name : finalFix.awayTeam.name;
 
     // Get top scorer
-    const scorerRes = await fetch(`${API_BASE_FD}competitions/WC/scorers?limit=1`);
+    const scorerRes = await fetch(`${ESPN_BASE}/scoreboard`);
     const scorerData = await scorerRes.json();
     const topScorer = scorerData.scorers?.[0]?.player?.name||null;
 
