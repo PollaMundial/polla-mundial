@@ -2272,7 +2272,10 @@ async function fetchLive(){
           h, a, live:true, locked:false, min:Math.round(min/60)||0,
           homeTeam:homeName, awayTeam:awayName, espnId:ev.id
         };
-        if(liveQr) liveUpdate.qr = liveQr;
+        // Only set qr if not already manually set — don't overwrite admin corrections
+        const existingQr = pollaLive.results?.[mid]?.qr;
+        if(liveQr && !existingQr) liveUpdate.qr = liveQr;
+        else if(existingQr) liveUpdate.qr = existingQr; // preserve manual value
         updates[`pollas/${CUR.pollaId}/results/${mid}`] = liveUpdate;
       } else if(isDone){
         finishedCount++;
