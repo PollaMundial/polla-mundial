@@ -637,6 +637,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div class="admin-hdr-s">Solo visible para el creador. Resultados actualizados automáticamente por API cada 3 min.</div>
       </div>
       <button class="sbtn full" style="background:var(--pd);margin-bottom:12px" onclick="openMultiPollaPanel()">🎛️ Panel multi-polla — actualizar todas a la vez</button>
+      <button class="sbtn full" style="background:var(--t2);margin-bottom:12px" onclick="forceSyncScorers(this)">⚽ Sincronizar tabla de goleadores</button>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div style="font-size:13px;font-weight:600;color:var(--t1)">Estado API</div>
         <span class="api-badge" id="api-badge" style="background:var(--bg);color:var(--t3)">⏳ Sin verificar</span>
@@ -1979,7 +1980,7 @@ function buildScorers(){
         <div class="scorer-row">
           <div class="scorer-rank${i<3?" top":""}">${i+1}</div>
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:700;color:var(--t1)">${getTeamFlag(s.t)} ${s.n}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--t1)">${s.f||getTeamFlag(s.t)} ${s.n}</div>
             <div style="font-size:11px;color:var(--t3)">${s.t}</div>
           </div>
           <div class="scorer-goals">${s.g}</div>
@@ -2231,7 +2232,12 @@ window.savePollaName=async function(){
 // ── API AUTO-SYNC ──
 async function fetchLive(){
   try{
-    const res = await fetch(`${ESPN_BASE}/scoreboard`);
+    // Use yesterday+today+tomorrow range to handle timezone differences (ESPN uses US Eastern)
+    const _d = new Date();
+    const _fmt = x => x.toISOString().split('T')[0].replace(/-/g,'');
+    const _yd = new Date(_d); _yd.setDate(_d.getDate()-1);
+    const _td = new Date(_d); _td.setDate(_d.getDate()+1);
+    const res = await fetch(`${ESPN_BASE}/scoreboard?dates=${_fmt(_yd)}-${_fmt(_td)}&limit=100`);
     if(!res.ok){ setApiBadge(false, `HTTP ${res.status}`); return; }
     const data = await res.json();
     const events = data.events || [];
@@ -2258,7 +2264,7 @@ async function fetchLive(){
         liveCount++;
         updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
           h, a, live:true, locked:false, min:Math.round(min/60)||0,
-          homeTeam:homeName, awayTeam:awayName
+          homeTeam:homeName, awayTeam:awayName, espnId:ev.id
         };
       } else if(isDone){
         finishedCount++;
@@ -2268,7 +2274,7 @@ async function fetchLive(){
           const qr = await autoAnswerQuestion(ev.id, mid);
           updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
             h, a, live:false, locked:true,
-            homeTeam:homeName, awayTeam:awayName,
+            homeTeam:homeName, awayTeam:awayName, espnId:ev.id,
             ...(qr ? {qr} : {})
           };
           finishedWithQr.push({mid, h, a, qr});
@@ -2465,15 +2471,21 @@ window.testApiConnection = async function(btn){
   result.style.display='block';
   result.textContent='Conectando con ESPN API...';
   try{
-    const res = await fetch(`${ESPN_BASE}/scoreboard`);
+    // Fetch yesterday + today + tomorrow to cover timezone differences
+    const d = new Date();
+    const fmt = x => x.toISOString().split('T')[0].replace(/-/g,'');
+    const yesterday = new Date(d); yesterday.setDate(d.getDate()-1);
+    const tomorrow  = new Date(d); tomorrow.setDate(d.getDate()+1);
+    const range = `${fmt(yesterday)}-${fmt(tomorrow)}`;
+    const res = await fetch(`${ESPN_BASE}/scoreboard?dates=${range}&limit=100`);
     if(!res.ok){ result.innerHTML=`❌ HTTP ${res.status}`; setApiBadge(false,`HTTP ${res.status}`); btn.textContent='🔌 Verificar conexión API'; btn.disabled=false; return; }
     const data = await res.json();
     const events = data.events||[];
     const live = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_IN_PROGRESS").length;
     const finished = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_FINAL").length;
     const scheduled = events.filter(e=>e.competitions?.[0]?.status?.type?.name==="STATUS_SCHEDULED").length;
-    result.innerHTML=`✅ ESPN API conectada — sin auth, sin límites<br>Partidos hoy: <strong>${events.length}</strong><br>En vivo: <strong>${live}</strong> · Finalizados: <strong>${finished}</strong> · Programados: <strong>${scheduled}</strong>`;
-    setApiBadge(true, `${events.length} partidos hoy`);
+    result.innerHTML=`✅ ESPN API conectada — sin auth, sin límites<br>Partidos (ayer/hoy/mañana): <strong>${events.length}</strong><br>En vivo: <strong>${live}</strong> · Finalizados: <strong>${finished}</strong> · Programados: <strong>${scheduled}</strong>`;
+    setApiBadge(true, `${events.length} partidos`);
   }catch(e){
     result.innerHTML=`❌ ${e.message}`;
     setApiBadge(false, e.message);
@@ -2604,41 +2616,18 @@ window.adminRecalcMatch = async function(btn){
 };
 async function fetchScorers(){
   try{
-    const scorerMap = {};
-    // Get all finished matches from all WC matches we track
-    const finishedMids = MATCHES
-      .filter(m => pollaLive.results?.[m.id]?.locked)
-      .map(m => m.id);
-    console.log(`[ESPN] fetchScorers: ${finishedMids.length} finished matches to process`);
-    if(!finishedMids.length){
-      console.log("[ESPN] fetchScorers: no finished matches yet");
+    const results = pollaLive.results||{};
+    // Get ESPN IDs from finished matches saved in Firebase
+    const finishedResults = Object.entries(results).filter(([mid,r])=>r.locked&&r.espnId);
+    console.log(`[ESPN] fetchScorers: ${finishedResults.length} finished matches with ESPN IDs`);
+    if(!finishedResults.length){
+      console.log("[ESPN] fetchScorers: no ESPN IDs saved yet — will populate after next live match");
       return;
     }
-    // Find ESPN event IDs for finished matches by fetching recent scoreboard
-    const start = "20260611";
-    const today = new Date().toISOString().split('T')[0].replace(/-/g,'');
-    // ESPN scoreboard with date range — fetch week by week
-    const allEvents = [];
-    let d = new Date("2026-06-11");
-    const now = new Date();
-    while(d <= now){
-      const dateStr = d.toISOString().split('T')[0].replace(/-/g,'');
+    const scorerMap = {};
+    for(const [mid, r] of finishedResults){
       try{
-        const r = await fetch(`${ESPN_BASE}/scoreboard?dates=${dateStr}`);
-        if(r.ok){
-          const data = await r.json();
-          allEvents.push(...(data.events||[]));
-        }
-      }catch(e2){}
-      d.setDate(d.getDate()+1);
-    }
-    const finished = allEvents.filter(e=>
-      e.competitions?.[0]?.status?.type?.name==="STATUS_FINAL"
-    );
-    console.log(`[ESPN] fetchScorers: ${finished.length} finished events found`);
-    for(const ev of finished){
-      try{
-        const sum = await fetch(`${ESPN_BASE}/summary?event=${ev.id}`);
+        const sum = await fetch(`${ESPN_BASE}/summary?event=${r.espnId}`);
         if(!sum.ok) continue;
         const sd = await sum.json();
         const comp = sd.header?.competitions?.[0];
@@ -2648,19 +2637,19 @@ async function fetchScorers(){
             const name = detail.athletesInvolved?.[0]?.displayName;
             const team = detail.team?.displayName||"";
             if(name){
-              if(!scorerMap[name]) scorerMap[name]={n:name,t:team,g:0};
+              if(!scorerMap[name]) scorerMap[name]={n:name,t:team,f:getTeamFlag(team),g:0};
               scorerMap[name].g++;
             }
           }
         }
-      }catch(e2){ console.warn("[ESPN] summary error:", e2.message); }
+      }catch(e2){ console.warn("[ESPN] summary error for event "+r.espnId+":", e2.message); }
     }
     const scorerList = Object.values(scorerMap).sort((a,b)=>b.g-a.g).slice(0,30);
     if(scorerList.length){
       await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
       console.log(`[ESPN] fetchScorers saved: ${scorerList.length} scorers`);
     } else {
-      console.log("[ESPN] fetchScorers: no goals found in summaries");
+      console.log("[ESPN] fetchScorers: no goals found yet");
     }
   }catch(e){ console.warn("[ESPN] fetchScorers error:", e.message); }
 }
@@ -2842,6 +2831,91 @@ function startApiSync(){
     }).catch(()=>{ smartApiSync(); });
   }, 60*1000); // check every minute
 }
+
+// ── FORCE SYNC SCORERS ──
+window.forceSyncScorers = async function(btn){
+  btn.textContent="⏳ Buscando goles..."; btn.disabled=true;
+  try{
+    const results = pollaLive.results||{};
+    const scorerMap = {};
+    const updates = {};
+    // For matches with espnId already saved, use it directly
+    const withId = Object.entries(results).filter(([mid,r])=>r.locked&&r.espnId);
+    // For matches without espnId, search ESPN scoreboard by date
+    const withoutId = Object.entries(results).filter(([mid,r])=>r.locked&&!r.espnId);
+    console.log(`[ESPN] forceSyncScorers: ${withId.length} with ID, ${withoutId.length} without`);
+    // For matches without ID — find ESPN event by matching team names
+    if(withoutId.length){
+      // Fetch all dates that had WC matches
+      const matchDates = [...new Set(MATCHES
+        .filter(m=>results[m.id]?.locked)
+        .map(m=>m.aDate.replace(/-/g,''))
+      )];
+      const allEvents = [];
+      for(const dateStr of matchDates){
+        try{
+          const r = await fetch(`${ESPN_BASE}/scoreboard?dates=${dateStr}`);
+          if(r.ok){ const d=await r.json(); allEvents.push(...(d.events||[])); }
+        }catch(e){}
+      }
+      // Also fetch current day
+      const todayStr = new Date().toISOString().split('T')[0].replace(/-/g,'');
+      try{
+        const r = await fetch(`${ESPN_BASE}/scoreboard?dates=${todayStr}`);
+        if(r.ok){ const d=await r.json(); allEvents.push(...(d.events||[])); }
+      }catch(e){}
+      // Match ESPN events to our finished matches by team names
+      for(const [mid,r] of withoutId){
+        const m = MATCHES.find(x=>x.id===parseInt(mid));
+        if(!m) continue;
+        const ev = allEvents.find(e=>{
+          const comp = e.competitions?.[0];
+          if(!comp) return false;
+          const h = comp.competitors?.find(c=>c.homeAway==="home")?.team?.displayName||"";
+          const a = comp.competitors?.find(c=>c.homeAway==="away")?.team?.displayName||"";
+          return (normalizeTeam(h)===normalizeTeam(m.home)||normalizeTeam(a)===normalizeTeam(m.away)) &&
+                 (normalizeTeam(a)===normalizeTeam(m.away)||normalizeTeam(h)===normalizeTeam(m.home));
+        });
+        if(ev){
+          updates[`pollas/${CUR.pollaId}/results/${mid}/espnId`] = ev.id;
+          withId.push([mid, {...r, espnId:ev.id}]);
+          console.log(`[ESPN] forceSyncScorers: found ${m.home} vs ${m.away} → ESPN ID ${ev.id}`);
+        }
+      }
+    }
+    // Now fetch all summaries
+    for(const [mid,r] of withId){
+      if(!r.espnId) continue;
+      try{
+        const sum = await fetch(`${ESPN_BASE}/summary?event=${r.espnId}`);
+        if(!sum.ok) continue;
+        const sd = await sum.json();
+        const comp = sd.header?.competitions?.[0]; if(!comp) continue;
+        for(const detail of comp.details||[]){
+          if(detail.type?.text==="Goal"||detail.type?.text==="Penalty - Scored"){
+            const name=detail.athletesInvolved?.[0]?.displayName;
+            const team=detail.team?.displayName||"";
+            if(name){
+              if(!scorerMap[name]) scorerMap[name]={n:name,t:team,f:getTeamFlag(team),g:0};
+              scorerMap[name].g++;
+            }
+          }
+        }
+      }catch(e2){}
+    }
+    const scorerList = Object.values(scorerMap).sort((a,b)=>b.g-a.g).slice(0,30);
+    if(Object.keys(updates).length) await update(ref(db,"/"),updates);
+    if(scorerList.length){
+      await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
+      btn.textContent=`✅ ${scorerList.length} goleadores actualizados`;
+    } else {
+      btn.textContent="⚠️ No se encontraron goles";
+    }
+  }catch(e){
+    btn.textContent="⚠️ Error: "+e.message;
+  }
+  setTimeout(()=>{ btn.textContent="⚽ Sincronizar tabla de goleadores"; btn.disabled=false; },3000);
+};
 
 // ── MULTI-POLLA PANEL ──
 // Per-match state for multi-polla (keyed by matchId)
