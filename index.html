@@ -1942,20 +1942,44 @@ function buildCruces(){
       return`<div class="bm-item"><span class="bm-num">${p.n}</span><span class="bm-teams">${homeL} vs ${awayL}${score}</span><div class="bm-right"><div class="bm-date">${p.d}${localT!=="s/h"?" · "+localT:""}</div><div class="bm-sede">${p.s}</div></div></div>`;
     }).join("")}</div>`).join("");
 }
+const TEAM_FLAGS = {
+  "Mexico":"🇲🇽","United States":"🇺🇸","Canada":"🇨🇦","Argentina":"🇦🇷","Brazil":"🇧🇷",
+  "France":"🇫🇷","Germany":"🇩🇪","Spain":"🇪🇸","Portugal":"🇵🇹","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  "Netherlands":"🇳🇱","Belgium":"🇧🇪","Colombia":"🇨🇴","Uruguay":"🇺🇾","Chile":"🇨🇱",
+  "Japan":"🇯🇵","South Korea":"🇰🇷","Morocco":"🇲🇦","Senegal":"🇸🇳","Nigeria":"🇳🇬",
+  "Ivory Coast":"🇨🇮","Ghana":"🇬🇭","Cameroon":"🇨🇲","South Africa":"🇿🇦","Egypt":"🇪🇬",
+  "Saudi Arabia":"🇸🇦","Iran":"🇮🇷","Qatar":"🇶🇦","Australia":"🇦🇺","Ecuador":"🇪🇨",
+  "Peru":"🇵🇪","Paraguay":"🇵🇾","Venezuela":"🇻🇪","Bolivia":"🇧🇴","Panama":"🇵🇦",
+  "Costa Rica":"🇨🇷","Honduras":"🇭🇳","Jamaica":"🇯🇲","Cuba":"🇨🇺","El Salvador":"🇸🇻",
+  "Italy":"🇮🇹","Croatia":"🇭🇷","Poland":"🇵🇱","Serbia":"🇷🇸","Denmark":"🇩🇰",
+  "Sweden":"🇸🇪","Norway":"🇳🇴","Switzerland":"🇨🇭","Austria":"🇦🇹","Czech Republic":"🇨🇿",
+  "Turkey":"🇹🇷","Greece":"🇬🇷","Ukraine":"🇺🇦","Romania":"🇷🇴","Hungary":"🇭🇺",
+  "Scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Wales":"🏴󠁧󠁢󠁷󠁬󠁳󠁿","Slovakia":"🇸🇰","Slovenia":"🇸🇮",
+  "Algeria":"🇩🇿","Tunisia":"🇹🇳","Mali":"🇲🇱","Burkina Faso":"🇧🇫","Guinea":"🇬🇳",
+  "Iraq":"🇮🇶","UAE":"🇦🇪","Oman":"🇴🇲","Jordan":"🇯🇴","New Zealand":"🇳🇿",
+  "Indonesia":"🇮🇩","Thailand":"🇹🇭","China":"🇨🇳","India":"🇮🇳","Curacao":"🇨🇼","Curaçao":"🇨🇼","Trinidad and Tobago":"🇹🇹","Haiti":"🇭🇹","Guadeloupe":"🇬🇵","Suriname":"🇸🇷","Guatemala":"🇬🇹","Nicaragua":"🇳🇮","Belize":"🇧🇿",
+  "DR Congo":"🇨🇩","Zambia":"🇿🇲","Zimbabwe":"🇿🇼","Kenya":"🇰🇪",
+};
+function getTeamFlag(teamName){
+  if(!teamName) return "";
+  if(TEAM_FLAGS[teamName]) return TEAM_FLAGS[teamName];
+  // Try partial match
+  const key = Object.keys(TEAM_FLAGS).find(k=>teamName.includes(k)||k.includes(teamName.split(" ")[0]));
+  return key ? TEAM_FLAGS[key] : "🏳️";
+}
+
 function buildScorers(){
-  // Use live API list if available, otherwise fall back to TOP_SCORERS
   const liveList = pollaLive.scorerList;
   const el = document.getElementById("ms-goleadores");
   if(!el) return;
   if(liveList && liveList.length){
-    // Show directly from API — any player who scored appears here
     el.innerHTML=`<div class="card">
-      <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores — actualizada automáticamente</div>
+      <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores</div>
       ${liveList.filter(s=>s.g>0).map((s,i)=>`
         <div class="scorer-row">
           <div class="scorer-rank${i<3?" top":""}">${i+1}</div>
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:700;color:var(--t1)">${s.n}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--t1)">${getTeamFlag(s.t)} ${s.n}</div>
             <div style="font-size:11px;color:var(--t3)">${s.t}</div>
           </div>
           <div class="scorer-goals">${s.g}</div>
@@ -1963,9 +1987,8 @@ function buildScorers(){
       ${liveList.every(s=>s.g===0)?'<div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">Aún no hay goles en el torneo</div>':''}
     </div>`;
   } else {
-    // Fallback: show TOP_SCORERS list with 0 goals until API syncs
     el.innerHTML=`<div class="card">
-      <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores — pendiente de sincronización</div>
+      <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores</div>
       ${TOP_SCORERS.slice(0,15).map((s,i)=>`
         <div class="scorer-row">
           <div class="scorer-rank">${i+1}</div>
@@ -2581,25 +2604,43 @@ window.adminRecalcMatch = async function(btn){
 };
 async function fetchScorers(){
   try{
-    // ESPN scorers endpoint for World Cup
-    const res = await fetch(`${ESPN_BASE}/scoreboard?limit=100`);
+    // Fetch all WC matches from tournament start to today
+    const start = "20260611";
+    const today = new Date().toISOString().split('T')[0].replace(/-/g,'');
+    const res = await fetch(`${ESPN_BASE}/scoreboard?limit=200&dates=${start}-${today}`);
     if(!res.ok) return;
     const data = await res.json();
-    // Collect goal scorers from all completed events
     const scorerMap = {};
-    for(const ev of data.events||[]){
-      const comp = ev.competitions?.[0]; if(!comp) continue;
-      for(const detail of comp.details||[]){
-        if(detail.type?.text==="Goal"||detail.type?.text==="Penalty - Scored"){
-          const name = detail.athletesInvolved?.[0]?.displayName;
-          const team = detail.team?.displayName||"";
-          if(name){ scorerMap[name]=(scorerMap[name]||{n:name,t:team,g:0}); scorerMap[name].g++; }
+    const finished = (data.events||[]).filter(e=>
+      e.competitions?.[0]?.status?.type?.name==="STATUS_FINAL"
+    );
+    console.log(`[ESPN] fetchScorers: ${finished.length} finished matches`);
+    for(const ev of finished){
+      try{
+        const sum = await fetch(`${ESPN_BASE}/summary?event=${ev.id}`);
+        if(!sum.ok) continue;
+        const sd = await sum.json();
+        const comp = sd.header?.competitions?.[0];
+        if(!comp) continue;
+        for(const detail of comp.details||[]){
+          if(detail.type?.text==="Goal"||detail.type?.text==="Penalty - Scored"){
+            const name = detail.athletesInvolved?.[0]?.displayName;
+            const team = detail.team?.displayName||"";
+            if(name){
+              if(!scorerMap[name]) scorerMap[name]={n:name,t:team,g:0};
+              scorerMap[name].g++;
+            }
+          }
         }
-      }
+      }catch(e2){}
     }
     const scorerList = Object.values(scorerMap).sort((a,b)=>b.g-a.g).slice(0,30);
-    if(scorerList.length) await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
-    console.log(`[ESPN] fetchScorers: ${scorerList.length} scorers`);
+    if(scorerList.length){
+      await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
+      console.log(`[ESPN] fetchScorers saved: ${scorerList.length} scorers`);
+    } else {
+      console.log("[ESPN] fetchScorers: no scorers found yet");
+    }
   }catch(e){ console.warn("[ESPN] fetchScorers error:", e.message); }
 }
 // ── AUTO BRACKET: update team names in knockout rounds from API ──
