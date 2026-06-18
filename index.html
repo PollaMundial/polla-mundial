@@ -1479,11 +1479,12 @@ function buildCard(m,result){
   } else if(result?.live){
     // Match is live — show live score, no editing allowed
     const myPick=myPicks[m.id]||{};
-    const rp2=PTS[m.r]||PTS_DEF.g;
+    const isNewSys = m.id >= NEW_SYSTEM_FROM_MATCH;
+    const rp2 = isNewSys ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
+    const allLivePicks = Object.values(pollaLive.members||{}).map(mem=>mem.picks?.[m.id]).filter(p=>p&&p.h!=null);
+    const {pts: myLivePts} = calcMatchPts(myPick, result.h, result.a, result.qr||null, rp2, isNewSys, allLivePicks);
     const exact=myPick.h===result.h&&myPick.a===result.a;
-    const winOk=(myPick.h>myPick.a&&result.h>result.a)||(myPick.h<myPick.a&&result.h<result.a)||(myPick.h===myPick.a&&result.h===result.a);
     const qOk=result.qr&&myPick.extra===result.qr;
-    let myLivePts=exact?rp2.e:winOk?rp2.w:0; if(qOk) myLivePts+=rp2.x;
     const hasPick=!!(myPick.h!=null||myPick.extra);
     d.innerHTML=`<div class="mmeta"><span class="mmeta-l" style="font-size:14px;font-weight:700"><span class="live-dot"></span>En vivo <span style="font-size:13px;font-weight:500;color:var(--t2)">${result.min?"· "+result.min+"'":""}</span></span><span class="rbadge ${rb}">${rl}</span></div>
     <div class="mrow" style="margin:10px 0">
@@ -1883,15 +1884,15 @@ function renderLB(){
     const av=m.photoURL?`<img src="${m.photoURL}" alt="">`:(m.dname||"?").substring(0,2).toUpperCase();
     const b=bonus[m.uid]||0;
     // Color logic: >5 pts = green, 1-5 = yellow, 0 = gray
-    // Circle color by scoring category
+    // Circle color by scoring category — clearly distinct
     const cat = bonusCat[m.uid]||"none";
     const circleStyle = cat==="exact"
-      ?"background:#dcfce7;color:#16a34a;border:1.5px solid #16a34a"
+      ?"background:#16a34a;color:#fff;border:1.5px solid #15803d"       // dark green filled
       :cat==="diff"
-      ?"background:#d1fae5;color:#059669;border:1.5px solid #22c55e"
+      ?"background:#86efac;color:#14532d;border:1.5px solid #4ade80"    // light green filled
       :b>0
-      ?"background:#ffedd5;color:#ea580c;border:1.5px solid #f97316"
-      :"background:#f1f1f1;color:var(--t3);border:1.5px solid #dde3ed";
+      ?"background:#ffedd5;color:#ea580c;border:1.5px solid #f97316"    // orange
+      :"background:#f1f1f1;color:var(--t3);border:1.5px solid #dde3ed"; // grey
     const liveCircle=hasLive
       ?`<div style="display:flex;flex-direction:column;align-items:center;gap:1px;margin-right:6px"><div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;${circleStyle}">+${b}</div><div style="font-size:9px;color:var(--t3);font-weight:600">en vivo</div></div>`
       :"";
