@@ -2118,20 +2118,17 @@ function buildAdminMatchSelector(){
     const r = pollaLive.results?.[mid]||{};
     adminScores = {h: r.h||0, a: r.a||0};
     adminExtra = r.qr||null;
-    document.getElementById("admin-sh").textContent = adminScores.h;
-    document.getElementById("admin-sa").textContent = adminScores.a;
+    const optsEl = document.getElementById("admin-extra-opts");
+    if(!optsEl) return;
     if(m){
-      document.getElementById("admin-home-lbl").textContent = m.home;
-      document.getElementById("admin-away-lbl").textContent = m.away;
-      const optsHtml = `<div style="font-size:11px;color:var(--t2);margin-bottom:4px;font-weight:600">${m.q}</div>` +
+      optsEl.innerHTML =
+        `<div style="font-size:12px;color:var(--t1);font-weight:600;margin-bottom:6px">${m.q}</div>` +
         `<div style="display:flex;gap:6px;flex-wrap:wrap">` +
         m.opts.map(o => `<button class="obtn${adminExtra===o?' sel':''}" onclick="adminSelectExtra('${o}',this)">${o}</button>`).join("") +
-        `</div>`;
-      document.getElementById("admin-extra-opts").innerHTML = optsHtml;
+        `</div>` +
+        (r.qr ? `<div style="font-size:11px;color:var(--gd);margin-top:6px">✅ Resp. actual: ${r.qr}</div>` : `<div style="font-size:11px;color:var(--am);margin-top:6px">⚠️ Sin respuesta guardada</div>`);
     } else {
-      document.getElementById("admin-extra-opts").innerHTML = "";
-      document.getElementById("admin-home-lbl").textContent = "Local";
-      document.getElementById("admin-away-lbl").textContent = "Visitante";
+      optsEl.innerHTML = "";
     }
   };
 }
@@ -2358,18 +2355,26 @@ async function autoAnswerQuestion(espnEventId, mid){
     // Get all play events
     const plays = data.plays || [];
     const goals = plays.filter(p=>p.scoringPlay);
-    const yellowCards = plays.filter(p=>p.type?.text?.toLowerCase().includes("yellow card"));
-    const redCards = plays.filter(p=>p.type?.text?.toLowerCase().includes("red card"));
+    const yellowCards = plays.filter(p=>p.type?.text?.toLowerCase().includes("yellow card")||p.type?.id===55||p.type?.id===56);
+    const redCards = plays.filter(p=>p.type?.text?.toLowerCase().includes("red card")||p.type?.id===57);
     const penalties = plays.filter(p=>p.type?.text?.toLowerCase().includes("penalty"));
     const firstGoal = goals.length ? goals[0] : null;
     const firstYellow = yellowCards.length ? yellowCards[0] : null;
 
     // Also check details from scoreboard
     const details = comp.details||[];
-    const allGoals = details.filter(d=>d.type?.text==="Goal"||d.type?.text==="Penalty - Scored");
-    const allYellows = details.filter(d=>d.type?.text==="Yellow Card");
-    const allReds = details.filter(d=>d.type?.text==="Red Card");
-    const allPens = details.filter(d=>d.type?.text==="Penalty - Scored"||d.type?.text==="Penalty - Missed");
+    const allGoals = details.filter(d=>["Goal","Penalty - Scored","Own Goal"].includes(d.type?.text));
+    const allYellows = details.filter(d=>d.type?.text==="Yellow Card"||d.type?.text==="Yellow");
+    const allReds = details.filter(d=>d.type?.text==="Red Card"||d.type?.text==="Red");
+    const allPens = details.filter(d=>d.type?.text?.includes("Penalty"));
+
+    // Helper: get goal minute from clock value
+    const goalMin = (g) => {
+      if(g.clock?.displayValue) return parseInt(g.clock.displayValue)||0;
+      if(g.clock?.value) return Math.round(g.clock.value/60);
+      if(g.period?.number===2) return 60; // assume 2nd half if period 2
+      return 0;
+    };
 
     const m = MATCHES.find(x=>x.id===mid); if(!m) return null;
     const q = m.q.toLowerCase();
@@ -2426,18 +2431,22 @@ async function autoAnswerQuestion(espnEventId, mid){
       qr = firstHalf.length > 0 ? "Sí" : "No";
     }
     else if(q.includes("segundo tiempo")){
-      const secondHalf = allGoals.filter(g=>(g.clock?.value||0) > 45*60);
-      qr = secondHalf.length > 0 ? "Sí" : "No";
+      // Check both plays and details for 2nd half goals
+      const secondHalfPlays = goals.filter(g=>goalMin(g)>45||g.period?.number===2);
+      const secondHalfDetails = allGoals.filter(g=>(g.clock?.value||0)>45*60||g.period?.number===2);
+      qr = (secondHalfPlays.length>0||secondHalfDetails.length>0) ? "Sí" : "No";
     }
     else if(q.includes("primeros 15")){
       const early = allGoals.filter(g=>(g.clock?.value||999) <= 15*60);
       qr = early.length > 0 ? "Sí" : "No";
     }
     else if(q.includes("últimos 10")){
-      const late = allGoals.filter(g=>(g.clock?.value||0) >= 80*60);
-      qr = late.length > 0 ? "Sí" : "No";
+      const latePlays = goals.filter(g=>goalMin(g)>=80);
+      const lateDetails = allGoals.filter(g=>(g.clock?.value||0)>=80*60);
+      qr = (latePlays.length>0||lateDetails.length>0) ? "Sí" : "No";
     }
     else if(q.includes("ambos equipos anotan")){
+      // Use final score — most reliable
       qr = (hScore > 0 && aScore > 0) ? "Sí" : "No";
     }
     else if(q.includes("2+ goles de diferencia")||q.includes("2 o más goles")){
@@ -2452,7 +2461,9 @@ async function autoAnswerQuestion(espnEventId, mid){
       qr = total > 3.5 ? "Más de 3.5" : "Menos de 3.5";
     }
     else if(q.includes("penal")){
-      qr = allPens.length > 0 ? "Sí" : "No";
+      const penPlays = penalties.length > 0;
+      const penDetails = allPens.length > 0;
+      qr = (penPlays||penDetails) ? "Sí" : "No";
     }
     else if(q.includes("prórroga")){
       const status = comp.status?.type?.name||"";
