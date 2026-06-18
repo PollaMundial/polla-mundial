@@ -1655,15 +1655,13 @@ function renderLive(){
     const allMemberPicks = Object.values(pollaLive.members||{}).map(mem=>mem.picks?.[m.id]).filter(p=>p&&p.h!=null);
     const picks=Object.entries(pollaLive.members||{}).map(([uid,mem])=>{
       let p=mem.picks?.[m.id];
-      let isRandom=false;
       if(!p||(!p.h&&!p.a&&!p.extra)){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
         p={h:seed%4,a:(seed*7+3)%4,extra:m.opts[(seed*13)%m.opts.length]};
-        isRandom=true;
       }
       const {pts} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allMemberPicks);
-      return{n:mem.dname||"?",s:`${p.h}-${p.a}`,p:p.extra||"—",me:uid===CUR.uid,pts,isRandom};
-      const {pts, cat: pCat} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allMemberPicks);
+      return{n:mem.dname||"?",s:`${p.h}-${p.a}`,p:p.extra||"—",me:uid===CUR.uid,pts};
+    }).filter(Boolean).sort((a,b)=>b.me-a.me);
     const oh=picks.map(o=>{
       const ptsBg=o.pts>0?"background:var(--gl);color:var(--gd)":"background:#f1f1f1;color:var(--t3)";
       const ptsCircle=`<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:800;${ptsBg};flex-shrink:0">+${o.pts}</span>`;
@@ -1677,23 +1675,28 @@ function renderLive(){
         </div>
       </div>`;
     }).join("");
+    let picksBlock = "";
+    if(picks.length) picksBlock = '<div class="rcard"><div class="rtitle" style="margin-bottom:6px">📊 Predicciones · puntos si termina así</div>' + oh + '</div>';
+    const homeDisplay=(m.ph!=="Grupos"&&r?.homeTeam&&!r.homeTeam.includes("TBD"))?r.homeTeam:m.home;
+    const awayDisplay=(m.ph!=="Grupos"&&r?.awayTeam&&!r.awayTeam.includes("TBD"))?r.awayTeam:m.away;
     const div=document.createElement("div"); div.className="live-card";
     div.innerHTML=`<div class="mmeta"><span class="mmeta-l"><span class="live-dot"></span>En vivo${r.min?" · "+r.min+"'":""}</span><span class="rbadge rb-g">${m.ph}</span></div>
     <div class="mrow">
-      <div class="team"><div class="tf">${m.hf}</div><div class="tn">${(()=>{const r=results[m.id];return(m.ph!=="Grupos"&&r?.homeTeam&&!r.homeTeam.includes("TBD"))?r.homeTeam:m.home;})()}</div></div>
+      <div class="team"><div class="tf">${m.hf}</div><div class="tn">${homeDisplay}</div></div>
       <div class="lkscore" style="color:var(--bm)">${r.h} – ${r.a}</div>
-      <div class="team"><div class="tf">${m.af}</div><div class="tn">${(()=>{const r=results[m.id];return(m.ph!=="Grupos"&&r?.awayTeam&&!r.awayTeam.includes("TBD"))?r.awayTeam:m.away;})()}</div></div>
+      <div class="team"><div class="tf">${m.af}</div><div class="tn">${awayDisplay}</div></div>
     </div>
     <div class="extrasec">
       <div style="background:var(--bg);border-radius:var(--rs);padding:8px 10px;margin-bottom:8px">
         <div style="font-size:12px;color:var(--t3);margin-bottom:3px">${m.q}</div>
-        <div style="font-size:14px;font-weight:700;color:${r.qr?"var(--gd)":"var(--t2)"}">${r.qr?"Resp. en vivo: "+r.qr:"Sin respuesta aún"}</div>
+        <div style="font-size:14px;font-weight:700;color:var(--gd)">${r.qr?"Resp. en vivo: "+r.qr:"Sin respuesta aún"}</div>
       </div>
-      ${picks.length?`<div class="rcard"><div class="rtitle" style="margin-bottom:6px">📊 Predicciones · puntos si termina así</div>${oh}</div>`:""}
+      ${picksBlock}
     </div>`;
     liveEl.appendChild(div);
   });
 }
+
 
 // ── MY PICKS ──
 function renderMyPicks(){
