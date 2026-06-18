@@ -524,7 +524,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
     <div class="tab" onclick="showTab('mispicks',this)"><span class="ti">✅</span>Resultados</div>
     <div class="tab" onclick="showTab('global',this)"><span class="ti">🌍</span>Campeón</div>
     <div class="tab" onclick="showTab('tabla',this)"><span class="ti">🏆</span>Tabla</div>
-    <div class="tab" onclick="showTab('mundial',this)" style="display:flex;flex-direction:column;align-items:center;gap:0;line-height:1"><span class="ti">🌐</span><span style="font-size:9px;letter-spacing:.2px">Mundial</span><span style="font-size:7px;color:var(--t3);margin-top:-1px">info</span></div>
+    <div class="tab" onclick="showTab('mundial',this)"><span class="ti">🌐</span>Mundial</div>
     <div class="tab" onclick="showTab('reglas',this)"><span class="ti">📋</span>Reglas</div>
     <div class="tab" id="admin-tab" style="display:none" onclick="showTab('admin',this)"><span class="ti">🔧</span>Admin</div>
   </div>
@@ -601,9 +601,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div class="rule-title">🥇 ¿Quién gana la polla?</div>
         <div class="rule-tip">Gana el jugador con más puntos al finalizar el torneo.</div>
         <div class="rule-row" style="margin-top:8px"><span>1° Criterio</span><span class="rule-pts" style="color:var(--gd)">Más puntos</span></div>
-        <div class="rule-row"><span>2° Criterio (desempate)</span><span class="rule-pts" style="color:var(--am)">🎯 Más exactos</span></div>
-        <div class="rule-row"><span>3° Criterio (desempate)</span><span class="rule-pts" style="color:var(--bm)">✅ Más acertados</span></div>
-        <div class="rule-row"><span>4° Criterio (desempate)</span><span class="rule-pts" style="color:var(--t2)">❓ Más preguntas extra</span></div>
+        <div class="rule-row"><span>2° Criterio (desempate)</span><span class="rule-pts" style="color:var(--am)">Más marcadores exactos</span></div>
+        <div class="rule-row"><span>3° Criterio (desempate)</span><span class="rule-pts" style="color:var(--bm)">Más resultados acertados</span></div>
+        <div class="rule-row"><span>4° Criterio (desempate)</span><span class="rule-pts" style="color:var(--t2)">Más preguntas correctas (P.C)</span></div>
 
       </div>
       <div class="rule-block">
@@ -1819,7 +1819,7 @@ function renderLB(){
     document.getElementById("s-ex").textContent=sorted[myRank].ex||0;
   }
   document.getElementById("lb-c").innerHTML=
-    `<div style="font-size:11px;color:var(--t3);padding:8px 12px 4px;border-bottom:1px solid var(--bor)">✅ Acertados · 🎯 Exactos · ❓ Preguntas extra</div>`+
+    `<div style="font-size:11px;color:var(--t3);padding:8px 12px 4px;border-bottom:1px solid var(--bor)">Acertados · Exactos · P.C = Preguntas Correctas</div>`+
     sorted.map((m,i)=>{
     const [bg,tc]=gcolors(m.dname||"x");
     const isMe=m.uid===CUR.uid;
@@ -1842,7 +1842,7 @@ function renderLB(){
     return`<div class="lbrow${isMe?" me-row":""}">
       <div class="lbrank ${rk[i]||""}">${i+1}</div>
       <div class="av" style="background:${bg};color:${tc}">${av}</div>
-      <div class="lbinfo"><div class="lbn">${m.dname||"?"}${isMe?" <span style='color:var(--bm);font-size:10px'>(tú)</span>":""}</div><div class="lbs">✅ ${m.ok||0} · 🎯 ${m.ex||0} · ❓ ${qPts}</div></div>
+      <div class="lbinfo"><div class="lbn">${m.dname||"?"}${isMe?" <span style='color:var(--bm);font-size:10px'>(tú)</span>":""}</div><div class="lbs">${(m.ok||0)-(m.ex||0)} acertados · ${m.ex||0} exactos · ${qPts} P.C</div></div>
       ${hasLive ? liveCircle : ""}
       ${ptsDisplay}
     </div>`;
