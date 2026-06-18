@@ -1883,22 +1883,24 @@ function renderLB(){
     const av=m.photoURL?`<img src="${m.photoURL}" alt="">`:(m.dname||"?").substring(0,2).toUpperCase();
     const b=bonus[m.uid]||0;
     // Color logic: >5 pts = green, 1-5 = yellow, 0 = gray
-    const circleStyle=b>5
-      ?"background:var(--gl);color:var(--gd);border:1.5px solid var(--gm)"
+    // Circle color by scoring category
+    const cat = bonusCat[m.uid]||"none";
+    const circleStyle = cat==="exact"
+      ?"background:#dcfce7;color:#16a34a;border:1.5px solid #16a34a"
+      :cat==="diff"
+      ?"background:#d1fae5;color:#059669;border:1.5px solid #22c55e"
       :b>0
-      ?"background:#fef3d0;color:#7a4400;border:1.5px solid #c47a00"
+      ?"background:#ffedd5;color:#ea580c;border:1.5px solid #f97316"
       :"background:#f1f1f1;color:var(--t3);border:1.5px solid #dde3ed";
     const liveCircle=hasLive
       ?`<div style="display:flex;flex-direction:column;align-items:center;gap:1px;margin-right:6px"><div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;${circleStyle}">+${b}</div><div style="font-size:9px;color:var(--t3);font-weight:600">en vivo</div></div>`
       :"";
     const projTotal = (m.pts||0) + b;
-    // Color by category: exact=dark green, diff=medium green, win=light green, none=default
-    const cat = bonusCat[m.uid]||"none";
-    const liveColor = cat==="exact"?"#16a34a":cat==="diff"?"#22c55e":b>0?"#f97316":"var(--t1)";
-    const ptsDisplay = hasLive
-      ? `<div class="lbp" style="color:${liveColor}">${projTotal} <span class="lbpu">pts</span>${b>0?`<span style="font-size:10px;color:${liveColor};margin-left:2px">(+${b})</span>`:""}</div>`
-      : `<div class="lbp">${m.pts||0} <span class="lbpu">pts</span></div>`;
     const qPts = m.qPtsPerMatch ? Object.values(m.qPtsPerMatch).filter(v=>v>0).length : 0;
+    // Pts number stays neutral — circle has the color
+    const ptsDisplay = hasLive
+      ? `<div class="lbp">${projTotal} <span class="lbpu">pts</span></div>`
+      : `<div class="lbp">${m.pts||0} <span class="lbpu">pts</span></div>`;
     return`<div class="lbrow${isMe?" me-row":""}">
       <div class="lbrank ${rk[i]||""}">${i+1}</div>
       <div class="av" style="background:${bg};color:${tc}">${av}</div>
