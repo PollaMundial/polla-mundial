@@ -667,8 +667,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
       </div>
       <div class="slbl">Recalcular puntos</div>
       <div class="card">
-        <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">Recalcula todos los puntos desde cero basándose en los resultados y respuestas actuales en Firebase.</div>
-        <button class="sbtn full" style="background:var(--rd)" onclick="adminRecalcMatch(this)">🔁 Recalcular TODOS los puntos desde cero</button>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">Guarda los puntos actuales como base fija (snapshot) antes de recalcular.</div>
+        <button class="sbtn full" style="background:var(--bm);margin-bottom:8px" onclick="adminSaveSnapshot(this)">📸 Guardar snapshot de puntos actuales</button>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:6px;margin-top:4px">Recalcula solo los partidos del sistema viejo (1–24) y guarda como snapshot.</div>
+        <button class="sbtn full" style="background:var(--t2);margin-bottom:8px" onclick="adminRecalcOld(this)">🔁 Recalcular sistema viejo (partidos 1–24)</button>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:6px">Recalcula solo los partidos del sistema nuevo (25+) sumando encima del snapshot.</div>
+        <button class="sbtn full" style="background:var(--rd)" onclick="adminRecalcNew(this)">🔁 Recalcular sistema nuevo (partidos 25+)</button>
       </div>
       <div class="slbl">Eliminar polla</div>
       <div class="card">
@@ -3465,6 +3469,133 @@ document.addEventListener("visibilitychange", ()=>{
     fetchLive();
   }
 });
+
+// ── SNAPSHOT & SPLIT RECALC ──
+
+window.adminSaveSnapshot = async function(btn){
+  if(!confirm("¿Guardar los puntos actuales de todos los jugadores como snapshot fijo?\n\nEsto congela los puntos actuales para que futuros recálculos partan desde aquí.")) return;
+  btn.textContent="Guardando..."; btn.disabled=true;
+  try{
+    const snap = await get(ref(db,`pollas/${CUR.pollaId}/members`));
+    if(!snap.exists()){ btn.textContent="Sin miembros"; btn.disabled=false; return; }
+    const snapshot = {};
+    Object.entries(snap.val()).forEach(([uid,mem])=>{
+      snapshot[uid]={pts:mem.pts||0, ok:mem.ok||0, ex:mem.ex||0};
+    });
+    await update(ref(db,`pollas/${CUR.pollaId}`),{
+      pointsSnapshot: snapshot,
+      pointsSnapshotMatch: SNAPSHOT_MATCH
+    });
+    btn.textContent="✅ Snapshot guardado";
+    setTimeout(()=>{ btn.textContent="📸 Guardar snapshot de puntos actuales"; btn.disabled=false; },2000);
+  }catch(e){ btn.textContent="⚠️ "+e.message; btn.disabled=false; }
+};
+
+window.adminRecalcOld = async function(btn){
+  if(!confirm("¿Recalcular puntos de partidos 1–24 con sistema viejo?\n\nEsto sobreescribirá los pts/ok/ex actuales y guardará el resultado como snapshot.")) return;
+  btn.textContent="Calculando..."; btn.disabled=true;
+  try{
+    const [membersSnap, resultsSnap] = await Promise.all([
+      get(ref(db,`pollas/${CUR.pollaId}/members`)),
+      get(ref(db,`pollas/${CUR.pollaId}/results`))
+    ]);
+    if(!membersSnap.exists()){ btn.textContent="Sin miembros"; btn.disabled=false; return; }
+    const members = membersSnap.val();
+    const results = resultsSnap.exists() ? resultsSnap.val() : {};
+    const oldMatches = MATCHES.filter(m=>m.id<NEW_SYSTEM_FROM_MATCH&&results[m.id]?.locked&&results[m.id]?.qr);
+    const updates = {};
+    const snapshot = {};
+    Object.entries(members).forEach(([uid,mem])=>{
+      let totalPts=0, totalOk=0, totalEx=0;
+      const ptsPerMatch={}, okPerMatch={}, exPerMatch={}, qPtsPerMatch={};
+      oldMatches.forEach(match=>{
+        const res=results[match.id];
+        const rp=PTS_DEF[match.r]||PTS_DEF.g;
+        let p=mem.picks?.[match.id];
+        if(!p||p.h==null){
+          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+          p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
+        }
+        const exact=p.h===res.h&&p.a===res.a;
+        const winOk=(p.h>p.a&&res.h>res.a)||(p.h<p.a&&res.h<res.a)||(p.h===p.a&&res.h===res.a);
+        const qOk=p.extra===res.qr?1:0;
+        let pts=exact?rp.e:winOk?rp.w:0; if(qOk) pts+=rp.x;
+        const ok=exact||winOk?1:0, ex=exact?1:0;
+        totalPts+=pts; totalOk+=ok; totalEx+=ex;
+        ptsPerMatch[match.id]=pts; okPerMatch[match.id]=ok;
+        exPerMatch[match.id]=ex; qPtsPerMatch[match.id]=qOk;
+      });
+      const globalPts=mem.globalPtsAwarded?(mem.globalPts||0):0;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/pts`]=totalPts+globalPts;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]=totalOk;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]=totalEx;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ptsPerMatch`]=ptsPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/okPerMatch`]=okPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/exPerMatch`]=exPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/qPtsPerMatch`]=qPtsPerMatch;
+      snapshot[uid]={pts:totalPts+globalPts, ok:totalOk, ex:totalEx};
+    });
+    oldMatches.forEach(m=>{ updates[`pollas/${CUR.pollaId}/results/${m.id}/ptsAwarded`]=true; });
+    updates[`pollas/${CUR.pollaId}/pointsSnapshot`]=snapshot;
+    updates[`pollas/${CUR.pollaId}/pointsSnapshotMatch`]=SNAPSHOT_MATCH;
+    await update(ref(db,"/"),updates);
+    btn.textContent="✅ Sistema viejo calculado y snapshot guardado";
+    setTimeout(()=>{ btn.textContent="🔁 Recalcular sistema viejo (partidos 1–24)"; btn.disabled=false; },3000);
+  }catch(e){ btn.textContent="⚠️ "+e.message; btn.disabled=false; }
+};
+
+window.adminRecalcNew = async function(btn){
+  if(!confirm("¿Recalcular puntos de partidos 25+ con sistema nuevo?\n\nSe sumará encima del snapshot guardado.")) return;
+  btn.textContent="Calculando..."; btn.disabled=true;
+  try{
+    const [membersSnap, resultsSnap, snapshotSnap] = await Promise.all([
+      get(ref(db,`pollas/${CUR.pollaId}/members`)),
+      get(ref(db,`pollas/${CUR.pollaId}/results`)),
+      get(ref(db,`pollas/${CUR.pollaId}/pointsSnapshot`))
+    ]);
+    if(!membersSnap.exists()){ btn.textContent="Sin miembros"; btn.disabled=false; return; }
+    const members=membersSnap.val();
+    const results=resultsSnap.exists()?resultsSnap.val():{};
+    const snapshot=snapshotSnap.exists()?snapshotSnap.val():null;
+    if(!snapshot){ btn.textContent="⚠️ Guarda el snapshot primero"; btn.disabled=false; return; }
+    const newMatches=MATCHES.filter(m=>m.id>=NEW_SYSTEM_FROM_MATCH&&results[m.id]?.locked&&results[m.id]?.qr);
+    const allPicksPerMatch={};
+    newMatches.forEach(match=>{
+      allPicksPerMatch[match.id]=Object.values(members).map(mem=>mem.picks?.[match.id]).filter(p=>p&&p.h!=null);
+    });
+    const updates={};
+    Object.entries(members).forEach(([uid,mem])=>{
+      const base=snapshot[uid]||{pts:0,ok:0,ex:0};
+      let totalPts=base.pts, totalOk=base.ok, totalEx=base.ex;
+      const ptsPerMatch={...mem.ptsPerMatch}, okPerMatch={...mem.okPerMatch};
+      const exPerMatch={...mem.exPerMatch}, qPtsPerMatch={...mem.qPtsPerMatch};
+      newMatches.forEach(match=>{
+        const res=results[match.id];
+        const rp=PTS_NEW[match.r]||PTS_NEW.g;
+        let p=mem.picks?.[match.id];
+        if(!p||p.h==null){
+          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+          p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
+        }
+        const {pts,ok,ex,qOk}=calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
+        totalPts+=pts; totalOk+=ok; totalEx+=ex;
+        ptsPerMatch[match.id]=pts; okPerMatch[match.id]=ok;
+        exPerMatch[match.id]=ex; qPtsPerMatch[match.id]=qOk;
+      });
+      updates[`pollas/${CUR.pollaId}/members/${uid}/pts`]=totalPts;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]=totalOk;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]=totalEx;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ptsPerMatch`]=ptsPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/okPerMatch`]=okPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/exPerMatch`]=exPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/qPtsPerMatch`]=qPtsPerMatch;
+    });
+    newMatches.forEach(m=>{ updates[`pollas/${CUR.pollaId}/results/${m.id}/ptsAwarded`]=true; });
+    await update(ref(db,"/"),updates);
+    btn.textContent="✅ Sistema nuevo calculado";
+    setTimeout(()=>{ btn.textContent="🔁 Recalcular sistema nuevo (partidos 25+)"; btn.disabled=false; },3000);
+  }catch(e){ btn.textContent="⚠️ "+e.message; btn.disabled=false; }
+};
 
 // ── INPUT HANDLERS ──
 document.getElementById("inp-email")?.addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("inp-pass")?.focus();});
