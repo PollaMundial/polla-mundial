@@ -653,37 +653,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
       <div class="card" id="members-list"></div>
       <div class="slbl">Predicciones globales</div>
       <div class="card" id="admin-globals"></div>
-      <div class="slbl">Control manual de partidos</div>
+      <div class="slbl">Respuesta a pregunta extra</div>
       <div class="card">
-        <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">Usa esto si la API no actualiza. Selecciona el partido y contrólalo manualmente.</div>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">Selecciona un partido finalizado y corrige la respuesta a la pregunta extra si es necesario.</div>
         <select class="g-sel" id="admin-match-sel" style="margin-bottom:8px"></select>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <div style="flex:1;text-align:center">
-            <div style="font-size:11px;color:var(--t2);margin-bottom:4px" id="admin-home-lbl">Local</div>
-            <div style="display:flex;align-items:center;justify-content:center;gap:8px">
-              <button class="sbtn-ctrl" onclick="adminScore('h',-1)">−</button>
-              <span id="admin-sh" style="font-size:20px;font-weight:800;color:var(--bm);min-width:24px;text-align:center">0</span>
-              <button class="sbtn-ctrl" onclick="adminScore('h',1)">+</button>
-            </div>
-          </div>
-          <div style="font-size:18px;font-weight:700;color:var(--t3)">–</div>
-          <div style="flex:1;text-align:center">
-            <div style="font-size:11px;color:var(--t2);margin-bottom:4px" id="admin-away-lbl">Visitante</div>
-            <div style="display:flex;align-items:center;justify-content:center;gap:8px">
-              <button class="sbtn-ctrl" onclick="adminScore('a',-1)">−</button>
-              <span id="admin-sa" style="font-size:20px;font-weight:800;color:var(--bm);min-width:24px;text-align:center">0</span>
-              <button class="sbtn-ctrl" onclick="adminScore('a',1)">+</button>
-            </div>
-          </div>
-        </div>
         <div id="admin-extra-opts" style="margin-bottom:10px"></div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <button class="sbtn full" style="background:var(--am)" onclick="adminLockAndLive(this)">🔒 Cerrar picks y poner en vivo</button>
-          <button class="sbtn full" style="background:var(--bm)" onclick="adminUpdateLive(this)">🔄 Actualizar marcador en vivo</button>
-          <button class="sbtn full" style="background:var(--gd)" onclick="adminFinalizeResult(this)">✅ Finalizar partido y calcular puntos</button>
-          <button class="sbtn full" style="background:var(--t2)" onclick="adminReopenMatch(this)">🔓 Reabrir partido (permitir cambios)</button>
-          <button class="sbtn full" style="background:var(--rd)" onclick="adminRecalcMatch(this)">🔁 Recalcular TODOS los puntos desde cero</button>
-        </div>
+        <button class="sbtn full" style="background:var(--gd)" onclick="adminSaveQr(this)">💾 Guardar respuesta</button>
+      </div>
+      <div class="slbl">Recalcular puntos</div>
+      <div class="card">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">Recalcula todos los puntos desde cero basándose en los resultados y respuestas actuales en Firebase.</div>
+        <button class="sbtn full" style="background:var(--rd)" onclick="adminRecalcMatch(this)">🔁 Recalcular TODOS los puntos desde cero</button>
       </div>
       <div class="slbl">Eliminar polla</div>
       <div class="card">
@@ -2071,21 +2051,19 @@ function buildAdminMatchSelector(){
   const sel = document.getElementById("admin-match-sel");
   if(!sel) return;
   const results = pollaLive.results||{};
-  // Show all matches including locked ones so admin can reopen
+  // Show all matches — admin needs to access any to fix qr
   const available = MATCHES
     .sort((a,b) => new Date(a.aDate+' '+a.aTime) - new Date(b.aDate+' '+b.aTime))
     .filter(m => {
-      const r = results[m.id];
-      // Show if not locked, or if locked today (can reopen)
       const ko = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
-      const isToday = Date.now() - ko < 24*60*60*1000;
-      return !r?.locked || isToday;
+      return ko <= Date.now() + 48*60*60*1000; // today + next 48h
     });
   sel.innerHTML = `<option value="">— Selecciona un partido —</option>` +
     available.map(m => {
       const r = results[m.id];
-      const status = r?.locked ? '🔒 Cerrado' : r?.live ? '🔴 En vivo' : '';
-      return `<option value="${m.id}">${m.home} vs ${m.away} ${status}</option>`;
+      const status = r?.locked ? '🔒' : r?.live ? '🔴' : '⏳';
+      const qrStatus = r?.qr ? ` · ✅ ${r.qr}` : r?.locked ? ' · ❓ Sin resp' : '';
+      return `<option value="${m.id}">${status} ${m.home} vs ${m.away}${qrStatus}</option>`;
     }).join("");
   sel.onchange = () => {
     const m = MATCHES.find(x => x.id === parseInt(sel.value));
@@ -2606,6 +2584,20 @@ async function calcPoints(matchId,rh,ra,qr){
   updates[`pollas/${CUR.pollaId}/results/${matchId}/ptsAwarded`] = true;
   if(Object.keys(updates).length) await update(ref(db,"/"),updates);
 }
+
+// Save only the extra question answer for a match
+window.adminSaveQr = async function(btn){
+  const mid = getAdminMatchId(); if(!mid) return;
+  if(!adminExtra){ alert("Selecciona una respuesta primero."); return; }
+  const m = MATCHES.find(x=>x.id===mid); if(!m) return;
+  if(!confirm(`¿Guardar respuesta "${adminExtra}" para el partido ${m.home} vs ${m.away}?`)) return;
+  btn.textContent="Guardando..."; btn.disabled=true;
+  try{
+    await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{qr:adminExtra});
+    btn.textContent="✅ Guardado";
+    setTimeout(()=>{ btn.textContent="💾 Guardar respuesta"; btn.disabled=false; },1500);
+  }catch(e){ btn.textContent="⚠️ Error: "+e.message; btn.disabled=false; }
+};
 
 // Recalculate points for a match from scratch (use to fix duplicated points)
 window.adminRecalcMatch = async function(btn){
