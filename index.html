@@ -1614,18 +1614,17 @@ function calcLiveBonus(){
   Object.entries(members).forEach(([uid])=>{ bonus[uid]=0; });
   liveMatches.forEach(m=>{
     const r=results[m.id]; if(!r) return;
-    const rp=PTS[m.r]||PTS_DEF.g;
+    const isNew = m.id >= NEW_SYSTEM_FROM_MATCH;
+    const rp = isNew ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
+    // Collect all picks for resultado único check
+    const allPicks = Object.values(members).map(mem=>mem.picks?.[m.id]).filter(p=>p&&p.h!=null);
     Object.entries(members).forEach(([uid,mem])=>{
       let p=mem.picks?.[m.id];
-      // Apply same random pick logic as display if no pick saved
       if(!p||(!p.h&&!p.a&&!p.extra)){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
         p={h:seed%4, a:(seed*7+3)%4, extra:m.opts[(seed*13)%m.opts.length]};
       }
-      const exact=p.h===r.h&&p.a===r.a;
-      const winOk=(p.h>p.a&&r.h>r.a)||(p.h<p.a&&r.h<r.a)||(p.h===p.a&&r.h===r.a);
-      const qOk=r.qr&&p.extra===r.qr;
-      let pts=exact?rp.e:winOk?rp.w:0; if(qOk) pts+=rp.x;
+      const {pts} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allPicks);
       bonus[uid]=(bonus[uid]||0)+pts;
     });
   });
