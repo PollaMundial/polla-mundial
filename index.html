@@ -591,11 +591,15 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div class="rule-title">🏆 Sistema de puntos</div>
         <table class="ptable">
           <tr><th>Tipo</th><th>Grupos</th><th>16avos</th><th>8vos</th><th>4tos</th><th>Semi/3°</th><th>Final</th></tr>
-          <tr><td>Ganador/empate</td><td>3</td><td>3</td><td>4</td><td>5</td><td>7</td><td>10</td></tr>
-          <tr><td>Marcador exacto</td><td>5</td><td>5</td><td>7</td><td>9</td><td>12</td><td>15</td></tr>
+          <tr><td>Marcador exacto</td><td>6</td><td>6</td><td>8</td><td>10</td><td>12</td><td>15</td></tr>
+          <tr><td>Acertar dif. de goles</td><td>4</td><td>4</td><td>5</td><td>6</td><td>8</td><td>10</td></tr>
+          <tr><td>Ganador/empate</td><td>3</td><td>3</td><td>4</td><td>5</td><td>6</td><td>8</td></tr>
+          <tr><td>Resultado único</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td></tr>
           <tr><td>Pregunta extra</td><td>1</td><td>1</td><td>1</td><td>2</td><td>2</td><td>3</td></tr>
         </table>
-        <div class="rule-tip">💡 El marcador exacto ya incluye los puntos de acertar el ganador.</div>
+        <div class="rule-tip">💡 Marcador exacto, diferencia de goles y ganador/empate <strong>no se acumulan</strong> — solo se otorga el de mayor puntaje.</div>
+        <div class="rule-tip" style="margin-top:6px">💡 Resultado único (+3): bonus si acertaste el marcador exacto y eres el único en la polla con ese pronóstico.</div>
+        <div class="rule-tip" style="margin-top:6px">💡 Pregunta extra y resultado único sí acumulan con los demás.</div>
       </div>
       <div class="rule-block">
         <div class="rule-title">🥇 ¿Quién gana la polla?</div>
@@ -789,7 +793,20 @@ const GROUPS = {
   L:{teams:[{n:"Inglaterra",f:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},{n:"Croacia",f:"🇭🇷"},{n:"Ghana",f:"🇬🇭"},{n:"Panamá",f:"🇵🇦"}]},
 };
 
+// OLD system (matches 1-24): exacto=5, ganador=3, extra=1
 const PTS_DEF = {g:{w:3,e:5,x:1},"16":{w:3,e:5,x:1},"8":{w:4,e:7,x:1},"4":{w:5,e:9,x:2},"2":{w:7,e:12,x:2},f:{w:10,e:15,x:3}};
+// NEW system (matches 25+): exacto, diff-goles, ganador, resultado-unico, extra
+// d = diferencia de goles, u = resultado único bonus
+const PTS_NEW = {
+  g:  {e:6, d:4, w:3, u:3, x:1},
+  "16":{e:6, d:4, w:3, u:3, x:1},
+  "8": {e:8, d:5, w:4, u:3, x:1},
+  "4": {e:10,d:6, w:5, u:3, x:2},
+  "2": {e:12,d:8, w:6, u:3, x:2},
+  f:  {e:15,d:10,w:8, u:3, x:3},
+};
+const NEW_SYSTEM_FROM_MATCH = 25; // Rep. Checa vs Sudáfrica onwards
+const SNAPSHOT_MATCH = 24; // Colombia vs Uzbekistán — snapshot after this match
 let PTS = JSON.parse(JSON.stringify(PTS_DEF));
 const RB={g:"rb-g","16":"rb-16","8":"rb-8","4":"rb-4","2":"rb-2",f:"rb-f"};
 const RL={g:"Grupo","16":"16avos","8":"Octavos","4":"Cuartos","2":"Semifinal",f:"Final"};
@@ -1425,7 +1442,15 @@ function buildCard(m,result){
     const oh=picks.map(o=>{
       const ok=o.s===`${result.h}-${result.a}`;
       const qok=result.qr&&o.p===result.qr;
-      return`<div class="rrow"><span style="${o.me?"color:var(--bm);font-weight:700":""}">${o.n}${o.me?" (tú)":""}</span><span class="rpick${ok?" ok":""}">${o.s} · <span style="${qok?"color:var(--gd);font-weight:700":""}">${o.p}</span></span></div>`;
+      return`<div class="rrow" style="padding:8px 0;border-bottom:1px solid var(--bor)">
+        <span style="font-size:14px;font-weight:${o.me?"700":"500"};color:${o.me?"var(--bm)":"var(--t1)"}">${o.n}${o.me?" (tú)":""}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:14px;font-weight:700;color:${ok?"var(--gd)":"var(--t2)"}">${o.s}</span>
+          <span style="width:1px;height:14px;background:var(--bor);display:inline-block"></span>
+          <span style="font-size:13px;color:${qok?"var(--gd)":"var(--t2)"}${qok?";font-weight:600":""}">${o.p}</span>
+          <span style="font-size:13px;font-weight:700;color:${ok||qok?"var(--gd)":"var(--t3)"}">+${o.pts}</span>
+        </div>
+      </div>`;
     }).join("");
     d.innerHTML=`<div class="mmeta"><span class="mmeta-l">📅 ${m.date} · ${m.time}</span><span class="rbadge ${rb}">${rl}</span></div>
     <div class="mrow">
@@ -1449,16 +1474,26 @@ function buildCard(m,result){
     const qOk=result.qr&&myPick.extra===result.qr;
     let myLivePts=exact?rp2.e:winOk?rp2.w:0; if(qOk) myLivePts+=rp2.x;
     const hasPick=!!(myPick.h!=null||myPick.extra);
-    d.innerHTML=`<div class="mmeta"><span class="mmeta-l"><span class="live-dot"></span>En vivo${result.min?" · "+result.min+"'":""}</span><span class="rbadge ${rb}">${rl}</span></div>
-    <div class="mrow">
-      <div class="team"><div class="tf">${m.hf}</div><div class="tn">${homeDisplay}</div></div>
-      <div class="lkscore" style="color:var(--bm)">${result.h} – ${result.a}</div>
-      <div class="team"><div class="tf">${m.af}</div><div class="tn">${awayDisplay}</div></div>
+    d.innerHTML=`<div class="mmeta"><span class="mmeta-l" style="font-size:14px;font-weight:700"><span class="live-dot"></span>En vivo <span style="font-size:13px;font-weight:500;color:var(--t2)">${result.min?"· "+result.min+"'":""}</span></span><span class="rbadge ${rb}">${rl}</span></div>
+    <div class="mrow" style="margin:10px 0">
+      <div class="team"><div class="tf" style="font-size:28px">${m.hf}</div><div class="tn" style="font-size:15px;font-weight:500">${homeDisplay}</div></div>
+      <div class="lkscore" style="color:var(--bm);font-size:34px;font-weight:700">${result.h} – ${result.a}</div>
+      <div class="team"><div class="tf" style="font-size:28px">${m.af}</div><div class="tn" style="font-size:15px;font-weight:500">${awayDisplay}</div></div>
     </div>
     <div class="extrasec">
-      <div class="extlbl">❓ ${m.q}${result.qr?` · <span class="lkbadge">Resp: ${result.qr}</span>`:`<span style="font-size:10px;color:var(--t3);margin-left:4px">(pendiente)</span>`}</div>
-      ${hasPick?`<div style="font-size:12px;color:var(--t2);margin-top:6px">Tu pick: <strong>${myPick.h??'—'}-${myPick.a??'—'}</strong> · Pregunta: <strong style="color:${qOk?'var(--gd)':'var(--t2)'}">${myPick.extra||'—'}</strong> · Puntos actuales: <strong style="color:${myLivePts>0?'var(--gd)':'var(--t3)'};font-family:'Barlow Condensed',sans-serif;font-size:15px">+${myLivePts}</strong></div>`:`<div style="font-size:12px;color:var(--rd);margin-top:6px">⚠️ No pusiste un pronóstico para este partido.</div>`}
-      <div class="locknotice" style="margin-top:7px">🔒 Picks cerrados — ve a <strong>En vivo</strong> para ver todas las predicciones</div>
+      <div style="background:var(--bg);border-radius:var(--rs);padding:8px 10px;margin-bottom:8px">
+        <div style="font-size:12px;color:var(--t3);margin-bottom:3px">${m.q}</div>
+        <div style="font-size:14px;font-weight:700;color:${result.qr?'var(--gd)':'var(--t2)'}">${result.qr?'Resp. en vivo: '+result.qr:'Sin respuesta aún'}</div>
+      </div>
+      ${hasPick?`<div style="display:flex;align-items:center;justify-content:space-between;border:0.5px solid var(--bor);border-radius:var(--rs);padding:8px 12px">
+        <span style="font-size:14px;font-weight:700;color:var(--t1)">Tu pick</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:14px;font-weight:700;color:${myLivePts>0?'var(--gd)':'var(--t2)'}">${myPick.h??'—'}–${myPick.a??'—'}</span>
+          <span style="font-size:13px;color:var(--t2)">${myPick.extra||'—'}</span>
+          <span style="font-size:14px;font-weight:700;color:${myLivePts>0?'var(--gd)':'var(--t3)'}">+${myLivePts}</span>
+        </div>
+      </div>`:`<div style="font-size:12px;color:var(--rd)">⚠️ No pusiste pronóstico para este partido.</div>`}
+      <div style="font-size:12px;color:var(--t3);margin-top:8px;text-align:center">🔒 Picks cerrados — ve a En vivo para ver todos</div>
     </div>`;
   } else {
     // Auto-lock: if kick-off time has passed, treat as read-only (picks closed)
@@ -1690,19 +1725,24 @@ function renderMyPicks(){
     const myScore = myPick ? `${myPick.h}-${myPick.a}` : "—";
     const myExtra = myPick?.extra||"—";
     const myExactOk = myPick && myPick.h===r.h && myPick.a===r.a;
-    const myWinOk = myPick && ((myPick.h>myPick.a&&r.h>r.a)||(myPick.h<myPick.a&&r.h<r.a)||(myPick.h===myPick.a&&r.h===r.a));
+    const myWinOk = myPick && !myExactOk && ((myPick.h>myPick.a&&r.h>r.a)||(myPick.h<myPick.a&&r.h<r.a)||(myPick.h===myPick.a&&r.h===r.a));
+    const myDiffOk = myPick && !myExactOk && !myWinOk && ((r.h-r.a)===(myPick.h-myPick.a));
     const myQOk = myPick && r.qr && myPick.extra===r.qr;
+    const resultLabel = myExactOk?"Exacto":myDiffOk?"Dif. goles":myWinOk?"Acertado":"No acertado";
+    const resultColor = myExactOk?"#16a34a":(myDiffOk||myWinOk)?"#4ade80":"var(--t3)";
+    const resultBg = myExactOk?"#dcfce7":(myDiffOk||myWinOk)?"#f0fdf4":"var(--rl)";
+    const resultBorder = myExactOk?"#16a34a":(myDiffOk||myWinOk)?"#86efac":"var(--rm)";
     return`<div class="pick-card" onclick="this.querySelector('.pick-body').classList.toggle('open')">
       <div class="pick-hdr">
         <div style="flex:1;min-width:0">
           <div class="pick-teams">${m.hf} ${m.home} ${r.h}–${r.a} ${m.away} ${m.af}</div>
-          <div class="pick-date" style="margin-top:3px">
-            Tu pick: <strong style="color:${myExactOk?"var(--gd)":myWinOk?"var(--gd)":"var(--t2)"}">${myScore}</strong>
+          <div style="margin-top:6px">
+            <span style="background:${resultBg};border:0.5px solid ${resultBorder};color:${resultColor};font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px">${resultLabel} · ${myScore}</span>
           </div>
-          <div class="pick-date" style="margin-top:2px;color:var(--t3)">${m.q}</div>
+          <div class="pick-date" style="color:var(--t3);margin-top:6px">${m.q}</div>
           <div class="pick-date" style="margin-top:2px">
-            Tu resp: <span style="color:${myQOk?"var(--gd)":"var(--t2);font-weight:500"}">${myExtra}</span>
-            · Correcta: <span style="color:var(--gd);font-weight:600">${r.qr||"pendiente"}</span>
+            Tu resp: <span style="color:${myQOk?"#16a34a":"var(--t2)"};font-weight:${myQOk?"600":"400"}">${myExtra}</span>
+            · Correcta: <span style="color:#16a34a;font-weight:600">${r.qr||"pendiente"}</span>
           </div>
         </div>
         <div class="pick-pts ${ptsCls}">+${myPts}pts</div>
@@ -1842,7 +1882,7 @@ function renderLB(){
     return`<div class="lbrow${isMe?" me-row":""}">
       <div class="lbrank ${rk[i]||""}">${i+1}</div>
       <div class="av" style="background:${bg};color:${tc}">${av}</div>
-      <div class="lbinfo"><div class="lbn">${m.dname||"?"}${isMe?" <span style='color:var(--bm);font-size:10px'>(tú)</span>":""}</div><div class="lbs">${(m.ok||0)-(m.ex||0)} acertados · ${m.ex||0} exactos · ${qPts} P.C</div></div>
+      <div class="lbinfo"><div class="lbn">${m.dname||"?"}${isMe?" <span style='color:var(--bm);font-size:10px'>(tú)</span>":""}</div><div class="lbs">${m.ex||0} exactos · ${(m.ok||0)-(m.ex||0)} acertados · ${qPts} P.C</div></div>
       ${hasLive ? liveCircle : ""}
       ${ptsDisplay}
     </div>`;
@@ -2073,8 +2113,9 @@ function buildAdminMatchSelector(){
       return `<option value="${m.id}">${status} ${m.home} vs ${m.away}${qrStatus}</option>`;
     }).join("");
   sel.onchange = () => {
-    const m = MATCHES.find(x => x.id === parseInt(sel.value));
-    const r = pollaLive.results?.[sel.value]||{};
+    const mid = parseInt(sel.value);
+    const m = MATCHES.find(x => x.id === mid);
+    const r = pollaLive.results?.[mid]||{};
     adminScores = {h: r.h||0, a: r.a||0};
     adminExtra = r.qr||null;
     document.getElementById("admin-sh").textContent = adminScores.h;
@@ -2349,15 +2390,31 @@ async function autoAnswerQuestion(espnEventId, mid){
       }
     }
     else if(q.includes("1ª tarjeta amarilla")||q.includes("primera tarjeta amarilla")){
-      const fy = allYellows[0]||firstYellow;
+      // Try from details first, then from plays
+      const fy = allYellows[0] || firstYellow ||
+        plays.find(p=>p.type?.text?.toLowerCase().includes("yellow")||p.type?.id===55||p.type?.id===56);
       if(fy){
-        const cardTeam = fy.team?.displayName||"";
-        const normCard = normalizeTeam(cardTeam);
-        const normHome = normalizeTeam(homeName);
-        if(normCard && normHome && (normCard===normHome||normHome.split(" ").some(w=>w.length>2&&normCard.includes(w)))){
-          qr = homeName;
-        } else {
-          qr = awayName;
+        const cardTeam = fy.team?.displayName||fy.participants?.[0]?.athlete?.team?.displayName||"";
+        if(cardTeam){
+          const normCard = normalizeTeam(cardTeam);
+          const normHome = normalizeTeam(homeName);
+          const shareWord=(a,b)=>a.split(" ").filter(w=>w.length>2).some(w=>b.includes(w));
+          qr = (normCard===normHome||shareWord(normCard,normHome)) ? homeName : awayName;
+        }
+      }
+      // Also check athlete involvement in all plays for yellow card events
+      if(!qr){
+        for(const play of plays){
+          if(play.type?.text?.toLowerCase().includes("yellow")||play.type?.id===55||play.type?.id===56){
+            const team = play.team?.displayName||play.participants?.[0]?.athlete?.team?.displayName||"";
+            if(team){
+              const normCard = normalizeTeam(team);
+              const normHome = normalizeTeam(homeName);
+              const shareWord=(a,b)=>a.split(" ").filter(w=>w.length>2).some(w=>b.includes(w));
+              qr = (normCard===normHome||shareWord(normCard,normHome)) ? homeName : awayName;
+              break;
+            }
+          }
         }
       }
     }
@@ -2546,8 +2603,31 @@ window.testApiConnection = async function(btn){
 };
 
 
+function calcMatchPts(p, rh, ra, qr, rp, isNewSystem, allPicks){
+  const exact = p.h===rh && p.a===ra;
+  const diffOk = !exact && (rh-ra) === (p.h-p.a);
+  const winOk = !exact && !diffOk && ((p.h>p.a&&rh>ra)||(p.h<p.a&&rh<ra)||(p.h===p.a&&rh===ra));
+  const qOk = p.extra===qr ? 1 : 0;
+  let pts = 0;
+  if(isNewSystem){
+    if(exact)        pts = rp.e;
+    else if(diffOk)  pts = rp.d;
+    else if(winOk)   pts = rp.w;
+    if(exact && allPicks){
+      const others = allPicks.filter(op=>op.h===p.h&&op.a===p.a);
+      if(others.length===1) pts += rp.u;
+    }
+  } else {
+    if(exact)   pts = rp.e;
+    else if(winOk) pts = rp.w;
+  }
+  if(qOk) pts += rp.x;
+  const ok = (exact||diffOk||winOk) ? 1 : 0;
+  const ex = exact ? 1 : 0;
+  return {pts, ok, ex, qOk};
+}
+
 async function calcPoints(matchId,rh,ra,qr){
-  // Guard: read fresh data from Firebase to avoid using stale local snapshot
   const [membersSnap, resultSnap] = await Promise.all([
     get(ref(db,`pollas/${CUR.pollaId}/members`)),
     get(ref(db,`pollas/${CUR.pollaId}/results/${matchId}`))
@@ -2555,46 +2635,50 @@ async function calcPoints(matchId,rh,ra,qr){
   if(!membersSnap.exists()) return;
   const members = membersSnap.val();
   const resultData = resultSnap.exists() ? resultSnap.val() : {};
-
-  // Idempotency guard: if points were already awarded for this match, skip
   if(resultData.ptsAwarded){
     console.log(`calcPoints: match ${matchId} already awarded, skipping.`);
     return;
   }
-
-  const m=MATCHES.find(x=>x.id===matchId); if(!m) return;
-  const rp=PTS[m.r]||PTS_DEF.g;
+  const m = MATCHES.find(x=>x.id===matchId); if(!m) return;
+  const isNewSystem = matchId >= NEW_SYSTEM_FROM_MATCH;
+  const rp = isNewSystem ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
+  const allPicks = Object.values(members).map(mem=>mem.picks?.[matchId]).filter(p=>p&&p.h!=null);
   const updates={};
   Object.entries(members).forEach(([uid,mem])=>{
     let p=mem.picks?.[matchId];
-    // If no pick, generate deterministic random (same logic as display)
-    if(!p||(!p.h&&!p.a&&!p.extra)){
+    if(!p||p.h==null){
       const seed=(uid+String(matchId)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-      p={h:seed%4, a:(seed*7+3)%4, extra:m.opts[(seed*13)%m.opts.length]};
-      // Save random pick to Firebase so it's visible in results
+      p={h:seed%4,a:(seed*7+3)%4,extra:m.opts[(seed*13)%m.opts.length]};
       updates[`pollas/${CUR.pollaId}/members/${uid}/picks/${matchId}`]=p;
     }
-    const exact=p.h===rh&&p.a===ra;
-    const winOk=(p.h>p.a&&rh>ra)||(p.h<p.a&&rh<ra)||(p.h===p.a&&rh===ra);
-    let pts=exact?rp.e:winOk?rp.w:0;
-    const ok=exact||winOk?1:0, ex=exact?1:0;
-    if(p.extra===qr) pts+=rp.x;
-    const qOk2 = p.extra===qr ? 1 : 0;
+    const {pts,ok,ex,qOk} = calcMatchPts(p,rh,ra,qr,rp,isNewSystem,allPicks);
     updates[`pollas/${CUR.pollaId}/members/${uid}/pts`]=(mem.pts||0)+pts;
     updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]=(mem.ok||0)+ok;
     updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]=(mem.ex||0)+ex;
-    // Store per-match breakdown so adminRecalcMatch can roll back correctly
     updates[`pollas/${CUR.pollaId}/members/${uid}/ptsPerMatch/${matchId}`]=pts;
     updates[`pollas/${CUR.pollaId}/members/${uid}/okPerMatch/${matchId}`]=ok;
     updates[`pollas/${CUR.pollaId}/members/${uid}/exPerMatch/${matchId}`]=ex;
-    updates[`pollas/${CUR.pollaId}/members/${uid}/qPtsPerMatch/${matchId}`]=qOk2;
+    updates[`pollas/${CUR.pollaId}/members/${uid}/qPtsPerMatch/${matchId}`]=qOk;
   });
-  // Mark as awarded — prevents double calculation if called twice
   updates[`pollas/${CUR.pollaId}/results/${matchId}/ptsAwarded`] = true;
   if(Object.keys(updates).length) await update(ref(db,"/"),updates);
-  // Checkpoint: save current scorer list so next day starts from here
+  if(matchId===SNAPSHOT_MATCH) setTimeout(()=>{ savePointsSnapshot(); }, 2000);
   setTimeout(()=>{ checkpointScorers(); }, 3000);
 }
+
+async function savePointsSnapshot(){
+  try{
+    const snap = await get(ref(db,`pollas/${CUR.pollaId}/members`));
+    if(!snap.exists()) return;
+    const snapshot = {};
+    Object.entries(snap.val()).forEach(([uid,mem])=>{
+      snapshot[uid]={pts:mem.pts||0,ok:mem.ok||0,ex:mem.ex||0};
+    });
+    await update(ref(db,`pollas/${CUR.pollaId}`),{pointsSnapshot:snapshot,pointsSnapshotMatch:SNAPSHOT_MATCH});
+    console.log("[Snapshot] saved after match", SNAPSHOT_MATCH);
+  }catch(e){ console.warn("[Snapshot] error:", e.message); }
+}
+
 
 async function checkpointScorers(){
   try{
@@ -2615,12 +2699,20 @@ window.adminSaveQr = async function(btn){
   const mid = getAdminMatchId(); if(!mid) return;
   if(!adminExtra){ alert("Selecciona una respuesta primero."); return; }
   const m = MATCHES.find(x=>x.id===mid); if(!m) return;
-  if(!confirm(`¿Guardar respuesta "${adminExtra}" para el partido ${m.home} vs ${m.away}?`)) return;
+  const r = pollaLive.results?.[mid]||{};
+  if(!r.locked){ alert("El partido no está cerrado todavía."); return; }
+  if(!confirm(`¿Guardar respuesta "${adminExtra}" para ${m.home} vs ${m.away} y calcular puntos?`)) return;
   btn.textContent="Guardando..."; btn.disabled=true;
   try{
-    await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{qr:adminExtra});
-    btn.textContent="✅ Guardado";
-    setTimeout(()=>{ btn.textContent="💾 Guardar respuesta"; btn.disabled=false; },1500);
+    // Save qr and reset ptsAwarded so calcPoints runs
+    await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
+      qr: adminExtra,
+      ptsAwarded: false
+    });
+    // Now calculate points
+    await calcPoints(mid, r.h||0, r.a||0, adminExtra);
+    btn.textContent="✅ Guardado y puntos calculados";
+    setTimeout(()=>{ btn.textContent="💾 Guardar respuesta"; btn.disabled=false; buildAdminMatchSelector(); },2000);
   }catch(e){ btn.textContent="⚠️ Error: "+e.message; btn.disabled=false; }
 };
 
@@ -2645,35 +2737,49 @@ window.adminRecalcMatch = async function(btn){
 
     const updates = {};
 
-    // For each member, recalculate total from scratch
+    // Load snapshot (points locked before new system)
+    const snapshotSnap = await get(ref(db,`pollas/${CUR.pollaId}/pointsSnapshot`));
+    const snapshot = snapshotSnap.exists() ? snapshotSnap.val() : null;
+
+    // Only recalculate matches from new system onwards
+    const newSystemMatches = finalized.filter(m=>m.id>=NEW_SYSTEM_FROM_MATCH);
+    const allPicksPerMatch = {};
+    newSystemMatches.forEach(match=>{
+      allPicksPerMatch[match.id] = Object.values(members).map(mem=>mem.picks?.[match.id]).filter(p=>p&&p.h!=null);
+    });
+
     Object.entries(members).forEach(([uid, mem])=>{
-      let totalPts = 0, totalOk = 0, totalEx = 0, totalQ = 0;
+      // Start from snapshot if available, otherwise from 0
+      const base = snapshot?.[uid] || {pts:0,ok:0,ex:0};
+      let totalPts = base.pts, totalOk = base.ok, totalEx = base.ex, totalQ = 0;
       const ptsPerMatch = {}, okPerMatch = {}, exPerMatch = {}, qPtsPerMatch = {};
 
-      finalized.forEach(match => {
+      // Keep old match breakdowns unchanged
+      finalized.filter(m=>m.id<NEW_SYSTEM_FROM_MATCH).forEach(match=>{
+        ptsPerMatch[match.id] = mem.ptsPerMatch?.[match.id]||0;
+        okPerMatch[match.id]  = mem.okPerMatch?.[match.id]||0;
+        exPerMatch[match.id]  = mem.exPerMatch?.[match.id]||0;
+        qPtsPerMatch[match.id]= mem.qPtsPerMatch?.[match.id]||0;
+      });
+
+      // Recalculate new system matches
+      newSystemMatches.forEach(match => {
         const res = results[match.id];
-        const rp = PTS[match.r]||PTS_DEF.g;
+        const rp = PTS_NEW[match.r]||PTS_NEW.g;
         let p = mem.picks?.[match.id];
-        if(!p){
+        if(!p||p.h==null){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
           p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
         }
-        const exact = p.h===res.h && p.a===res.a;
-        const winOk = (p.h>p.a&&res.h>res.a)||(p.h<p.a&&res.h<res.a)||(p.h===p.a&&res.h===res.a);
-        const qOk = p.extra===res.qr ? 1 : 0;
-        let pts = exact?rp.e:winOk?rp.w:0;
-        const ok = exact||winOk?1:0, ex = exact?1:0;
-        if(qOk) pts+=rp.x;
-        totalPts += pts; totalOk += ok; totalEx += ex; totalQ += qOk;
+        const {pts,ok,ex,qOk} = calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
+        totalPts+=pts; totalOk+=ok; totalEx+=ex; totalQ+=qOk;
         ptsPerMatch[match.id] = pts;
         okPerMatch[match.id]  = ok;
         exPerMatch[match.id]  = ex;
-        qPtsPerMatch[match.id] = qOk;
+        qPtsPerMatch[match.id]= qOk;
       });
 
-      // Also preserve global points if already awarded
       const globalPts = mem.globalPtsAwarded ? (mem.globalPts||0) : 0;
-
       updates[`pollas/${CUR.pollaId}/members/${uid}/pts`] = totalPts + globalPts;
       updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]  = totalOk;
       updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]  = totalEx;
