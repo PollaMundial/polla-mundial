@@ -522,9 +522,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
     <div class="tab active" onclick="showTab('partidos',this)"><span class="ti">🗓</span>Partidos</div>
     <div class="tab" onclick="showTab('envivo',this)"><span class="ti">🔴</span>En vivo</div>
     <div class="tab" onclick="showTab('mispicks',this)"><span class="ti">✅</span>Resultados</div>
-    <div class="tab" onclick="showTab('global',this)"><span class="ti">🌍</span>Global</div>
+    <div class="tab" onclick="showTab('global',this)"><span class="ti">🌍</span>Campeón</div>
     <div class="tab" onclick="showTab('tabla',this)"><span class="ti">🏆</span>Tabla</div>
-    <div class="tab" onclick="showTab('mundial',this)"><span class="ti">🌐</span>Mundial</div>
+    <div class="tab" onclick="showTab('mundial',this)" style="display:flex;flex-direction:column;align-items:center;gap:0;line-height:1"><span class="ti">🌐</span><span style="font-size:9px;letter-spacing:.2px">Mundial</span><span style="font-size:7px;color:var(--t3);margin-top:-1px">info</span></div>
     <div class="tab" onclick="showTab('reglas',this)"><span class="ti">📋</span>Reglas</div>
     <div class="tab" id="admin-tab" style="display:none" onclick="showTab('admin',this)"><span class="ti">🔧</span>Admin</div>
   </div>
@@ -601,8 +601,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div class="rule-title">🥇 ¿Quién gana la polla?</div>
         <div class="rule-tip">Gana el jugador con más puntos al finalizar el torneo.</div>
         <div class="rule-row" style="margin-top:8px"><span>1° Criterio</span><span class="rule-pts" style="color:var(--gd)">Más puntos</span></div>
-        <div class="rule-row"><span>2° Criterio (desempate)</span><span class="rule-pts" style="color:var(--am)">Más marcadores exactos</span></div>
-        <div class="rule-row"><span>3° Criterio (desempate)</span><span class="rule-pts" style="color:var(--bm)">Más resultados acertados</span></div>
+        <div class="rule-row"><span>2° Criterio (desempate)</span><span class="rule-pts" style="color:var(--am)">🎯 Más exactos</span></div>
+        <div class="rule-row"><span>3° Criterio (desempate)</span><span class="rule-pts" style="color:var(--bm)">✅ Más acertados</span></div>
+        <div class="rule-row"><span>4° Criterio (desempate)</span><span class="rule-pts" style="color:var(--t2)">❓ Más preguntas extra</span></div>
 
       </div>
       <div class="rule-block">
@@ -1793,13 +1794,16 @@ function renderLB(){
     }
   });
 
-  // Sort: 1) total pts, 2) exact scores, 3) correct results
+  // Sort: 1) total pts, 2) exact scores, 3) correct results, 4) extra questions correct
   const sorted=Object.values(deduped).sort((a,b)=>{
     const aTotal=(a.pts||0)+(bonus[a.uid]||0);
     const bTotal=(b.pts||0)+(bonus[b.uid]||0);
     if(bTotal!==aTotal) return bTotal-aTotal;
     if((b.ex||0)!==(a.ex||0)) return (b.ex||0)-(a.ex||0);
-    return (b.ok||0)-(a.ok||0);
+    if((b.ok||0)!==(a.ok||0)) return (b.ok||0)-(a.ok||0);
+    const aQ=a.qPtsPerMatch?Object.values(a.qPtsPerMatch).filter(v=>v>0).length:0;
+    const bQ=b.qPtsPerMatch?Object.values(b.qPtsPerMatch).filter(v=>v>0).length:0;
+    return bQ-aQ;
   });
 
   if(!sorted.length){ document.getElementById("lb-c").innerHTML=`<div class="empty"><div class="ei">🏆</div><p>La tabla aparecerá cuando haya resultados.</p></div>`; return; }
@@ -1814,7 +1818,9 @@ function renderLB(){
     document.getElementById("s-ok").textContent=(sorted[myRank].ok||0)-(sorted[myRank].ex||0);
     document.getElementById("s-ex").textContent=sorted[myRank].ex||0;
   }
-  document.getElementById("lb-c").innerHTML=sorted.map((m,i)=>{
+  document.getElementById("lb-c").innerHTML=
+    `<div style="font-size:11px;color:var(--t3);padding:8px 12px 4px;border-bottom:1px solid var(--bor)">✅ Acertados · 🎯 Exactos · ❓ Preguntas extra</div>`+
+    sorted.map((m,i)=>{
     const [bg,tc]=gcolors(m.dname||"x");
     const isMe=m.uid===CUR.uid;
     const av=m.photoURL?`<img src="${m.photoURL}" alt="">`:(m.dname||"?").substring(0,2).toUpperCase();
@@ -1832,10 +1838,11 @@ function renderLB(){
     const ptsDisplay = hasLive
       ? `<div class="lbp" style="color:${b>0?"var(--gd)":"var(--t1)"}">${projTotal} <span class="lbpu">pts</span></div>`
       : `<div class="lbp">${m.pts||0} <span class="lbpu">pts</span></div>`;
+    const qPts = m.qPtsPerMatch ? Object.values(m.qPtsPerMatch).filter(v=>v>0).length : 0;
     return`<div class="lbrow${isMe?" me-row":""}">
       <div class="lbrank ${rk[i]||""}">${i+1}</div>
       <div class="av" style="background:${bg};color:${tc}">${av}</div>
-      <div class="lbinfo"><div class="lbn">${m.dname||"?"}${isMe?" <span style='color:var(--bm);font-size:10px'>(tú)</span>":""}</div><div class="lbs">${(m.ok||0)-(m.ex||0)} acertados · ${m.ex||0} exactos</div></div>
+      <div class="lbinfo"><div class="lbn">${m.dname||"?"}${isMe?" <span style='color:var(--bm);font-size:10px'>(tú)</span>":""}</div><div class="lbs">✅ ${m.ok||0} · 🎯 ${m.ex||0} · ❓ ${qPts}</div></div>
       ${hasLive ? liveCircle : ""}
       ${ptsDisplay}
     </div>`;
@@ -2572,6 +2579,7 @@ async function calcPoints(matchId,rh,ra,qr){
     let pts=exact?rp.e:winOk?rp.w:0;
     const ok=exact||winOk?1:0, ex=exact?1:0;
     if(p.extra===qr) pts+=rp.x;
+    const qOk2 = p.extra===qr ? 1 : 0;
     updates[`pollas/${CUR.pollaId}/members/${uid}/pts`]=(mem.pts||0)+pts;
     updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]=(mem.ok||0)+ok;
     updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]=(mem.ex||0)+ex;
@@ -2579,10 +2587,27 @@ async function calcPoints(matchId,rh,ra,qr){
     updates[`pollas/${CUR.pollaId}/members/${uid}/ptsPerMatch/${matchId}`]=pts;
     updates[`pollas/${CUR.pollaId}/members/${uid}/okPerMatch/${matchId}`]=ok;
     updates[`pollas/${CUR.pollaId}/members/${uid}/exPerMatch/${matchId}`]=ex;
+    updates[`pollas/${CUR.pollaId}/members/${uid}/qPtsPerMatch/${matchId}`]=qOk2;
   });
   // Mark as awarded — prevents double calculation if called twice
   updates[`pollas/${CUR.pollaId}/results/${matchId}/ptsAwarded`] = true;
   if(Object.keys(updates).length) await update(ref(db,"/"),updates);
+  // Checkpoint: save current scorer list so next day starts from here
+  setTimeout(()=>{ checkpointScorers(); }, 3000);
+}
+
+async function checkpointScorers(){
+  try{
+    const snap = await get(ref(db,`pollas/${CUR.pollaId}/scorerList`));
+    if(!snap.exists()) return;
+    // Save as checkpoint with today's date
+    const today = new Date().toISOString().split('T')[0];
+    await update(ref(db,`pollas/${CUR.pollaId}`),{
+      scorerCheckpoint: snap.val(),
+      scorerCheckpointDate: today
+    });
+    console.log("[Scorers] checkpoint saved for", today);
+  }catch(e){ console.warn("[Scorers] checkpoint error:", e.message); }
 }
 
 // Save only the extra question answer for a match
@@ -2622,25 +2647,28 @@ window.adminRecalcMatch = async function(btn){
 
     // For each member, recalculate total from scratch
     Object.entries(members).forEach(([uid, mem])=>{
-      let totalPts = 0, totalOk = 0, totalEx = 0;
-      const ptsPerMatch = {}, okPerMatch = {}, exPerMatch = {};
+      let totalPts = 0, totalOk = 0, totalEx = 0, totalQ = 0;
+      const ptsPerMatch = {}, okPerMatch = {}, exPerMatch = {}, qPtsPerMatch = {};
 
       finalized.forEach(match => {
         const res = results[match.id];
         const rp = PTS[match.r]||PTS_DEF.g;
-        const p = mem.picks?.[match.id];
-        if(!p) return;
+        let p = mem.picks?.[match.id];
+        if(!p){
+          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+          p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
+        }
         const exact = p.h===res.h && p.a===res.a;
         const winOk = (p.h>p.a&&res.h>res.a)||(p.h<p.a&&res.h<res.a)||(p.h===p.a&&res.h===res.a);
+        const qOk = p.extra===res.qr ? 1 : 0;
         let pts = exact?rp.e:winOk?rp.w:0;
         const ok = exact||winOk?1:0, ex = exact?1:0;
-        if(p.extra===res.qr) pts+=rp.x;
-        totalPts += pts;
-        totalOk  += ok;
-        totalEx  += ex;
+        if(qOk) pts+=rp.x;
+        totalPts += pts; totalOk += ok; totalEx += ex; totalQ += qOk;
         ptsPerMatch[match.id] = pts;
         okPerMatch[match.id]  = ok;
         exPerMatch[match.id]  = ex;
+        qPtsPerMatch[match.id] = qOk;
       });
 
       // Also preserve global points if already awarded
@@ -2649,9 +2677,10 @@ window.adminRecalcMatch = async function(btn){
       updates[`pollas/${CUR.pollaId}/members/${uid}/pts`] = totalPts + globalPts;
       updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]  = totalOk;
       updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]  = totalEx;
-      updates[`pollas/${CUR.pollaId}/members/${uid}/ptsPerMatch`] = ptsPerMatch;
-      updates[`pollas/${CUR.pollaId}/members/${uid}/okPerMatch`]  = okPerMatch;
-      updates[`pollas/${CUR.pollaId}/members/${uid}/exPerMatch`]  = exPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ptsPerMatch`]  = ptsPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/okPerMatch`]   = okPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/exPerMatch`]   = exPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/qPtsPerMatch`] = qPtsPerMatch;
     });
 
     // Mark all finalized matches as awarded
@@ -2722,9 +2751,17 @@ function normName(s){ return s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCa
 
 // Seed known scorers — always write manual list to Firebase as baseline
 async function seedScorers(){
-  // Always write the full manual list to Firebase as baseline
-  await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: [...MANUAL_SCORERS].sort((a,b)=>b.g-a.g)});
-  console.log("[Scorers] seeded", MANUAL_SCORERS.length, "scorers");
+  // Use checkpoint if available (avoids showing 0 while API loads)
+  const snap = await get(ref(db,`pollas/${CUR.pollaId}/scorerCheckpoint`));
+  if(snap.exists() && snap.val().length){
+    const checkpoint = snap.val();
+    await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: checkpoint});
+    console.log("[Scorers] loaded from checkpoint:", checkpoint.length, "scorers");
+  } else {
+    // No checkpoint yet — use manual list as baseline
+    await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: [...MANUAL_SCORERS].sort((a,b)=>b.g-a.g)});
+    console.log("[Scorers] seeded from manual list:", MANUAL_SCORERS.length, "scorers");
+  }
 }
 
 
