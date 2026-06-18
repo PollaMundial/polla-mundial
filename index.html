@@ -2601,14 +2601,8 @@ window.adminSaveQr = async function(btn){
 
 // Recalculate points for a match from scratch (use to fix duplicated points)
 window.adminRecalcMatch = async function(btn){
-  const mid = getAdminMatchId(); if(!mid) return;
-  const m = MATCHES.find(x => x.id === mid); if(!m) return;
-  const resultSnap = await get(ref(db,`pollas/${CUR.pollaId}/results/${mid}`));
-  if(!resultSnap.exists()){ alert("Este partido no tiene resultado guardado."); return; }
-  const r = resultSnap.val();
-  if(!r.locked){ alert("El partido no está finalizado todavía."); return; }
-  if(!r.qr){ alert("Falta la respuesta a la pregunta extra."); return; }
-  if(!confirm(`⚠️ Esto recalcula todos los puntos de TODOS los partidos finalizados desde cero para cada jugador.\n\nSirve para corregir puntos duplicados o incorrectos.\n\n¿Continuar?`)) return;
+  // No match selection needed — recalculates ALL finalized matches from scratch
+  if(!confirm(`⚠️ Esto recalcula los puntos de TODOS los partidos finalizados desde cero.\n\nSirve para corregir puntos incorrectos o duplicados.\n\n¿Continuar?`)) return;
 
   btn.textContent = "Recalculando todo..."; btn.disabled = true;
   try{
