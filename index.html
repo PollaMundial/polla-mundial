@@ -1310,11 +1310,18 @@ function updateGlobalReminderBar(){
 }
 function updateBanner(){
   const me = pollaLive.members?.[CUR.uid]; if(!me) return;
-  const sorted = Object.values(pollaLive.members||{}).sort((a,b)=>(b.pts||0)-(a.pts||0));
+  // Always include live bonus in banner
+  const {bonus={}} = calcLiveBonus();
+  const myBonus = bonus[CUR.uid]||0;
+  const myTotal = (me.pts||0) + myBonus;
+  // Sort with live bonus for correct rank
+  const sorted = Object.values(pollaLive.members||{})
+    .map(m=>({...m, totalLive:(m.pts||0)+(bonus[m.uid]||0)}))
+    .sort((a,b)=>b.totalLive-a.totalLive);
   const rank = sorted.findIndex(m=>m.dname===CUR.pollaDname)+1;
-  document.getElementById("b-pts").textContent=me.pts||0;
+  document.getElementById("b-pts").textContent=myTotal;
   document.getElementById("b-pos").textContent="Posición #"+(rank||"—");
-  document.getElementById("s-pts").textContent=me.pts||0;
+  document.getElementById("s-pts").textContent=myTotal;
   document.getElementById("s-pos").textContent="#"+(rank||"—");
   document.getElementById("s-ok").textContent=(me.ok||0)-(me.ex||0);
   document.getElementById("s-ex").textContent=me.ex||0;
@@ -1610,8 +1617,8 @@ function calcLiveBonus(){
   const results=pollaLive.results||{};
   const members=pollaLive.members||{};
   const liveMatches=MATCHES.filter(m=>results[m.id]?.live);
-  const bonus={};
-  Object.entries(members).forEach(([uid])=>{ bonus[uid]=0; });
+  const bonus={}, bonusCat={};
+  Object.entries(members).forEach(([uid])=>{ bonus[uid]=0; bonusCat[uid]="none"; });
   liveMatches.forEach(m=>{
     const r=results[m.id]; if(!r) return;
     const isNew = m.id >= NEW_SYSTEM_FROM_MATCH;
@@ -1624,11 +1631,13 @@ function calcLiveBonus(){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
         p={h:seed%4, a:(seed*7+3)%4, extra:m.opts[(seed*13)%m.opts.length]};
       }
-      const {pts} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allPicks);
+      const {pts, cat} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allPicks);
       bonus[uid]=(bonus[uid]||0)+pts;
+      const catRank={exact:3,diff:2,win:1,none:0};
+      if(!bonusCat[uid]||catRank[cat]>catRank[bonusCat[uid]]) bonusCat[uid]=cat;
     });
   });
-  return bonus;
+  return {bonus, bonusCat};
 }
 
 // ── LIVE ──
@@ -1641,30 +1650,32 @@ function renderLive(){
   emptyEl.style.display="none"; liveEl.innerHTML="";
   live.forEach(m=>{
     const r=results[m.id];
-    const rp=PTS[m.r]||PTS_DEF.g;
+    const isNew = m.id >= NEW_SYSTEM_FROM_MATCH;
+    const rp = isNew ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
+    const allMemberPicks = Object.values(pollaLive.members||{}).map(mem=>mem.picks?.[m.id]).filter(p=>p&&p.h!=null);
     const picks=Object.entries(pollaLive.members||{}).map(([uid,mem])=>{
       let p=mem.picks?.[m.id];
       let isRandom=false;
       if(!p||(!p.h&&!p.a&&!p.extra)){
-        // Deterministic random based on uid+matchId — stays consistent across refreshes
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-        const rh=seed%4, ra=(seed*7+3)%4;
-        const rExtra=m.opts[(seed*13)%m.opts.length];
-        p={h:rh,a:ra,extra:rExtra};
+        p={h:seed%4,a:(seed*7+3)%4,extra:m.opts[(seed*13)%m.opts.length]};
         isRandom=true;
       }
-      const exact=p.h===r.h&&p.a===r.a;
-      const winOk=(p.h>p.a&&r.h>r.a)||(p.h<p.a&&r.h<r.a)||(p.h===p.a&&r.h===r.a);
-      const qOk=r.qr&&p.extra===r.qr;
-      let pts=exact?rp.e:winOk?rp.w:0; if(qOk) pts+=rp.x;
+      const {pts} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allMemberPicks);
       return{n:mem.dname||"?",s:`${p.h}-${p.a}`,p:p.extra||"—",me:uid===CUR.uid,pts,isRandom};
-    }).filter(Boolean).sort((a,b)=>b.me-a.me);
+      const {pts, cat: pCat} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allMemberPicks);
     const oh=picks.map(o=>{
       const ptsBg=o.pts>0?"background:var(--gl);color:var(--gd)":"background:#f1f1f1;color:var(--t3)";
       const ptsCircle=`<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:800;${ptsBg};flex-shrink:0">+${o.pts}</span>`;
-      const randomBadge=o.isRandom?` <span style="font-size:10px;background:#fef3d0;color:#7a4400;border-radius:4px;padding:1px 5px;font-weight:600">🎲 azar</span>`:"";
-      const rowBg=o.isRandom?"background:#fffdf0;":"";
-      return`<div class="rrow" style="gap:6px;${rowBg}"><span style="${o.me?"color:var(--bm);font-weight:700":""};flex:1">${o.n}${o.me?" (tú)":""}${randomBadge}</span><span class="rpick" style="${o.isRandom?"opacity:0.6":""}">${o.s} · ${o.p}</span>${ptsCircle}</div>`;
+      return`<div class="rrow" style="padding:8px 0;border-bottom:1px solid var(--bor)">
+        <span style="font-size:14px;font-weight:${o.me?"700":"500"};color:${o.me?"var(--bm)":"var(--t1)"};flex:1">${o.n}${o.me?" (tú)":""}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:14px;font-weight:700;color:var(--t1)">${o.s}</span>
+          <span style="width:1px;height:14px;background:var(--bor);display:inline-block"></span>
+          <span style="font-size:13px;color:var(--t2)">${o.p}</span>
+          ${ptsCircle}
+        </div>
+      </div>`;
     }).join("");
     const div=document.createElement("div"); div.className="live-card";
     div.innerHTML=`<div class="mmeta"><span class="mmeta-l"><span class="live-dot"></span>En vivo${r.min?" · "+r.min+"'":""}</span><span class="rbadge rb-g">${m.ph}</span></div>
@@ -1673,8 +1684,12 @@ function renderLive(){
       <div class="lkscore" style="color:var(--bm)">${r.h} – ${r.a}</div>
       <div class="team"><div class="tf">${m.af}</div><div class="tn">${(()=>{const r=results[m.id];return(m.ph!=="Grupos"&&r?.awayTeam&&!r.awayTeam.includes("TBD"))?r.awayTeam:m.away;})()}</div></div>
     </div>
-    <div class="extrasec"><div class="extlbl">❓ ${m.q}</div>
-    ${picks.length?`<div class="rcard"><div class="rtitle">📊 Predicciones · puntos si termina así</div>${oh}</div>`:""}
+    <div class="extrasec">
+      <div style="background:var(--bg);border-radius:var(--rs);padding:8px 10px;margin-bottom:8px">
+        <div style="font-size:12px;color:var(--t3);margin-bottom:3px">${m.q}</div>
+        <div style="font-size:14px;font-weight:700;color:${r.qr?"var(--gd)":"var(--t2)"}">${r.qr?"Resp. en vivo: "+r.qr:"Sin respuesta aún"}</div>
+      </div>
+      ${picks.length?`<div class="rcard"><div class="rtitle" style="margin-bottom:6px">📊 Predicciones · puntos si termina así</div>${oh}</div>`:""}
     </div>`;
     liveEl.appendChild(div);
   });
@@ -1826,7 +1841,7 @@ function renderLB(){
   const members=pollaLive.members||{};
   const results=pollaLive.results||{};
   const hasLive=MATCHES.some(m=>results[m.id]?.live);
-  const bonus=hasLive?calcLiveBonus():{};
+  const {bonus={}, bonusCat={}} = hasLive ? calcLiveBonus() : {};
 
   // Deduplicate by dname — keep the one with more points
   const deduped={};
@@ -1853,10 +1868,6 @@ function renderLB(){
   const rk=["g","s","b"];
   const myRank=sorted.findIndex(m=>m.uid===CUR.uid);
   if(myRank>=0){
-    const myProjected = (sorted[myRank].pts||0) + (bonus[sorted[myRank].uid]||0);
-    document.getElementById("b-pts").textContent=myProjected;
-    document.getElementById("b-pos").textContent="Posición #"+(myRank+1);
-    document.getElementById("s-pts").textContent=myProjected;
     document.getElementById("s-pos").textContent="#"+(myRank+1);
     document.getElementById("s-ok").textContent=(sorted[myRank].ok||0)-(sorted[myRank].ex||0);
     document.getElementById("s-ex").textContent=sorted[myRank].ex||0;
@@ -1878,8 +1889,11 @@ function renderLB(){
       ?`<div style="display:flex;flex-direction:column;align-items:center;gap:1px;margin-right:6px"><div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;${circleStyle}">+${b}</div><div style="font-size:9px;color:var(--t3);font-weight:600">en vivo</div></div>`
       :"";
     const projTotal = (m.pts||0) + b;
+    // Color by category: exact=dark green, diff=medium green, win=light green, none=default
+    const cat = bonusCat[m.uid]||"none";
+    const liveColor = cat==="exact"?"#16a34a":cat==="diff"?"#22c55e":b>0?"#f97316":"var(--t1)";
     const ptsDisplay = hasLive
-      ? `<div class="lbp" style="color:${b>0?"var(--gd)":"var(--t1)"}">${projTotal} <span class="lbpu">pts</span></div>`
+      ? `<div class="lbp" style="color:${liveColor}">${projTotal} <span class="lbpu">pts</span>${b>0?`<span style="font-size:10px;color:${liveColor};margin-left:2px">(+${b})</span>`:""}</div>`
       : `<div class="lbp">${m.pts||0} <span class="lbpu">pts</span></div>`;
     const qPts = m.qPtsPerMatch ? Object.values(m.qPtsPerMatch).filter(v=>v>0).length : 0;
     return`<div class="lbrow${isMe?" me-row":""}">
@@ -2638,7 +2652,8 @@ function calcMatchPts(p, rh, ra, qr, rp, isNewSystem, allPicks){
   if(qOk) pts += rp.x;
   const ok = (exact||diffOk||winOk) ? 1 : 0;
   const ex = exact ? 1 : 0;
-  return {pts, ok, ex, qOk};
+  const cat = exact?"exact":diffOk?"diff":winOk?"win":"none";
+  return {pts, ok, ex, qOk, cat};
 }
 
 async function calcPoints(matchId,rh,ra,qr){
