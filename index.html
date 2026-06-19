@@ -1715,17 +1715,27 @@ function renderMyPicks(){
   }
   el.innerHTML=finished.map(m=>{
     const r=results[m.id];
-    const rp=PTS[m.r]||PTS_DEF.g;
+    const isNew = m.id >= NEW_SYSTEM_FROM_MATCH;
+    const rp = isNew ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
     const members=pollaLive.members||{};
-    // Build all picks for this match
+    // Build all resolved picks (including random) for resultado único check
+    const resolvedPicksMap = {};
+    Object.entries(members).forEach(([uid,mem])=>{
+      let p=mem.picks?.[m.id];
+      if(!p||p.h==null){
+        const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+        p={h:seed%4,a:(seed*7+3)%4,extra:m.opts[(seed*13)%m.opts.length]};
+      }
+      resolvedPicksMap[uid]=p;
+    });
+    const allResolvedPicks = Object.values(resolvedPicksMap);
+    // Build all picks for this match using new system
     const allPicks=Object.entries(members).map(([uid,mem])=>{
-      const p=mem.picks?.[m.id];
-      const exact=p&&p.h===r.h&&p.a===r.a;
-      const winOk=p&&((p.h>p.a&&r.h>r.a)||(p.h<p.a&&r.h<r.a)||(p.h===p.a&&r.h===r.a));
-      const qOk=p&&r.qr&&p.extra===r.qr;
-      let pts=p?(exact?rp.e:winOk?rp.w:0):0;
-      if(qOk) pts+=rp.x;
-      return{n:mem.dname||"?",p,pts,exact,winOk,qOk,me:uid===CUR.uid};
+      const p=resolvedPicksMap[uid];
+      const {pts,ok,ex,qOk,cat}=calcMatchPts(p,r.h,r.a,r.qr||null,rp,isNew,allResolvedPicks);
+      const exact=p.h===r.h&&p.a===r.a;
+      const winOk=(p.h>p.a&&r.h>r.a)||(p.h<p.a&&r.h<r.a)||(p.h===p.a&&r.h===r.a);
+      return{n:mem.dname||"?",p,pts,exact,winOk,qOk,cat,me:uid===CUR.uid};
     }).sort((a,b)=>b.pts-a.pts||(b.me?1:-1)-(a.me?1:-1));
     const myEntry=allPicks.find(x=>x.me);
     const myPts=myEntry?.pts||0;
@@ -2655,6 +2665,7 @@ function calcMatchPts(p, rh, ra, qr, rp, isNewSystem, allPicks){
     else if(winOk)   pts = rp.w;
     if(exact && allPicks){
       const others = allPicks.filter(op=>op.h===p.h&&op.a===p.a);
+      console.log(`[calcMatchPts] exact ${p.h}-${p.a}, allPicks=${allPicks.length}, same picks=${others.length}, unique=${others.length===1}`);
       if(others.length===1) pts += rp.u;
     }
   } else {
@@ -2683,8 +2694,9 @@ async function calcPoints(matchId,rh,ra,qr){
   const m = MATCHES.find(x=>x.id===matchId); if(!m) return;
   const isNewSystem = matchId >= NEW_SYSTEM_FROM_MATCH;
   const rp = isNewSystem ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
-  const allPicks = Object.values(members).map(mem=>mem.picks?.[matchId]).filter(p=>p&&p.h!=null);
+  // Build complete picks including random ones — needed for "resultado único" check
   const updates={};
+  const resolvedPicks = {}; // uid -> pick (real or random)
   Object.entries(members).forEach(([uid,mem])=>{
     let p=mem.picks?.[matchId];
     if(!p||p.h==null){
@@ -2692,6 +2704,11 @@ async function calcPoints(matchId,rh,ra,qr){
       p={h:seed%4,a:(seed*7+3)%4,extra:m.opts[(seed*13)%m.opts.length]};
       updates[`pollas/${CUR.pollaId}/members/${uid}/picks/${matchId}`]=p;
     }
+    resolvedPicks[uid]=p;
+  });
+  const allPicks = Object.values(resolvedPicks);
+  Object.entries(members).forEach(([uid,mem])=>{
+    const p = resolvedPicks[uid];
     const {pts,ok,ex,qOk} = calcMatchPts(p,rh,ra,qr,rp,isNewSystem,allPicks);
     updates[`pollas/${CUR.pollaId}/members/${uid}/pts`]=(mem.pts||0)+pts;
     updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]=(mem.ok||0)+ok;
@@ -2740,9 +2757,12 @@ window.adminSaveQr = async function(btn){
   const mid = getAdminMatchId(); if(!mid) return;
   if(!adminExtra){ alert("Selecciona una respuesta primero."); return; }
   const m = MATCHES.find(x=>x.id===mid); if(!m) return;
-  const r = pollaLive.results?.[mid]||{};
+  // Read fresh from Firebase — don't rely on local cache
+  const freshR = await get(ref(db,`pollas/${CUR.pollaId}/results/${mid}`));
+  if(!freshR.exists()){ alert("No hay resultado guardado para este partido."); return; }
+  const r = freshR.val();
   if(!r.locked){ alert("El partido no está cerrado todavía."); return; }
-  if(!confirm(`¿Guardar respuesta "${adminExtra}" para ${m.home} vs ${m.away} y calcular puntos?`)) return;
+  if(!confirm(`¿Guardar respuesta "${adminExtra}" para ${m.home} vs ${m.away} y calcular puntos?\nMarcador: ${r.h}-${r.a}`)) return;
   btn.textContent="Guardando..."; btn.disabled=true;
   try{
     // Save qr and reset ptsAwarded so calcPoints runs
@@ -2750,10 +2770,13 @@ window.adminSaveQr = async function(btn){
       qr: adminExtra,
       ptsAwarded: false
     });
-    // Now calculate points
+    // Now calculate points with confirmed fresh result
+    console.log(`[adminSaveQr] calcPoints mid=${mid} h=${r.h} a=${r.a} qr=${adminExtra}`);
     await calcPoints(mid, r.h||0, r.a||0, adminExtra);
+    // Save scorer checkpoint
+    setTimeout(()=>{ checkpointScorers(); fetchScorers(); }, 2000);
     btn.textContent="✅ Guardado y puntos calculados";
-    setTimeout(()=>{ btn.textContent="💾 Guardar respuesta"; btn.disabled=false; buildAdminMatchSelector(); },2000);
+    setTimeout(()=>{ btn.textContent="💾 Guardar respuesta"; btn.disabled=false; buildAdminMatchSelector(); },2500);
   }catch(e){ btn.textContent="⚠️ Error: "+e.message; btn.disabled=false; }
 };
 
@@ -2858,7 +2881,8 @@ const MANUAL_SCORERS = [
     {n:"Hwang In-Beom",        t:"South Korea",            f:"🇰🇷", g:1},
     {n:"Oh Hyeon-Gyu",         t:"South Korea",            f:"🇰🇷", g:1},
     {n:"Jovo Lukić",           t:"Bosnia and Herzegovina", f:"🇧🇦", g:1},
-    {n:"Cyle Larin",           t:"Canada",                 f:"🇨🇦", g:1},
+    {n:"Cyle Larin",           t:"Canada",                 f:"🇨🇦", g:2},
+    {n:"Jonathan David",        t:"Canada",                 f:"🇨🇦", g:3},
     {n:"Maurício",             t:"Paraguay",               f:"🇵🇾", g:1},
     {n:"Giovanni Reyna",       t:"United States",          f:"🇺🇸", g:1},
     {n:"Breel Embolo",         t:"Switzerland",            f:"🇨🇭", g:1},
@@ -2914,60 +2938,35 @@ async function seedScorers(){
 
 async function fetchScorers(){
   try{
-    const results = pollaLive.results||{};
-    // Get ESPN IDs from finished matches saved in Firebase
-    const finishedResults = Object.entries(results).filter(([mid,r])=>r.locked&&r.espnId);
-    console.log(`[ESPN] fetchScorers: ${finishedResults.length} finished matches with ESPN IDs`);
-    if(!finishedResults.length){
-      console.log("[ESPN] fetchScorers: no ESPN IDs saved yet — will populate after next live match");
-      return;
-    }
-    const scorerMap = {};
-    for(const [mid, r] of finishedResults){
-      try{
-        const sum = await fetch(`${ESPN_BASE}/summary?event=${r.espnId}`);
-        if(!sum.ok) continue;
-        const sd = await sum.json();
-        const comp = sd.header?.competitions?.[0];
-        if(!comp) continue;
-        for(const detail of comp.details||[]){
-          if(detail.type?.text==="Goal"||detail.type?.text==="Penalty - Scored"){
-            const name = detail.athletesInvolved?.[0]?.displayName;
-            const team = detail.team?.displayName||"";
-            if(name){
-              if(!scorerMap[name]) scorerMap[name]={n:name,t:team,f:getTeamFlag(team),g:0};
-              scorerMap[name].g++;
-            }
-          }
-        }
-      }catch(e2){ console.warn("[ESPN] summary error for event "+r.espnId+":", e2.message); }
-    }
-    // Merge ESPN data with manual list — ESPN data takes priority for matching names
+    // Use football-data.org scorers endpoint via Vercel proxy (no CORS)
+    const res = await fetch('/api/scorers');
+    if(!res.ok){ console.warn("[FD] fetchScorers HTTP:", res.status); return; }
+    const data = await res.json();
+    if(data.error){ console.warn("[FD] fetchScorers error:", data.error); return; }
+    const scorers = data.scorers||[];
+    console.log(`[FD] fetchScorers: ${scorers.length} scorers`);
+    if(!scorers.length) return;
     const mergedMap = {};
-    // Start with manual list as base
     MANUAL_SCORERS.forEach(s => { mergedMap[normName(s.n)] = {...s}; });
-    // Override/update with ESPN data
-    Object.values(scorerMap).forEach(s => {
-      const key = normName(s.n);
+    scorers.forEach(item => {
+      const name = item.player?.name||"";
+      const team = item.team?.name||"";
+      const goals = item.goals?.goals||0;
+      if(!name||!goals) return;
+      const key = normName(name);
       if(mergedMap[key]){
-        // Found match — update goals and keep our flag/name formatting
-        mergedMap[key].g = s.g;
-        if(s.f && s.f !== "🏳️") mergedMap[key].f = s.f;
+        mergedMap[key].g = goals;
+        if(!mergedMap[key].f||mergedMap[key].f==="🏳️") mergedMap[key].f = getTeamFlag(team);
       } else {
-        // New player from ESPN not in manual list — add them
-        mergedMap[key] = s;
+        mergedMap[key] = {n:name, t:team, f:getTeamFlag(team), g:goals};
       }
     });
-    const scorerList = Object.values(mergedMap).sort((a,b)=>b.g-a.g);
-    if(scorerList.length){
-      await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
-      console.log(`[ESPN] fetchScorers saved: ${scorerList.length} scorers (merged)`);
-    } else {
-      console.log("[ESPN] fetchScorers: no goals found yet");
-    }
-  }catch(e){ console.warn("[ESPN] fetchScorers error:", e.message); }
+    const scorerList = Object.values(mergedMap).filter(s=>s.g>0).sort((a,b)=>b.g-a.g);
+    await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList});
+    console.log(`[FD] fetchScorers saved: ${scorerList.length} scorers`);
+  }catch(e){ console.warn("[FD] fetchScorers error:", e.message); }
 }
-// ── AUTO BRACKET: update team names in knockout rounds from API ──
+
 async function fetchKnockoutTeams(){
   try{
     const res = await fetch(`${ESPN_BASE}/scoreboard`);
