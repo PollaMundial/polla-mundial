@@ -2310,6 +2310,12 @@ async function fetchLive(){
       const isLive = ["STATUS_IN_PROGRESS","STATUS_HALFTIME","STATUS_END_PERIOD","STATUS_FIRST_HALF","STATUS_SECOND_HALF"].includes(status)||(status.includes("PROGRESS")||status.includes("HALF"));
       const isDone = ["STATUS_FINAL","STATUS_FULL_TIME","STATUS_FINAL_AET","STATUS_FINAL_PEN"].includes(status)||status.includes("FINAL");
       console.log(`[ESPN] ${ev.name}: ${status} live:${isLive} done:${isDone} ${h}-${a}`);
+      // CRITICAL: never reopen a match that's already locked in Firebase
+      const alreadyLocked = pollaLive.results?.[mid]?.locked;
+      if(alreadyLocked){
+        console.log(`[ESPN] Skipping ${ev.name} — already locked in Firebase`);
+        continue;
+      }
       if(isLive){
         liveCount++;
         // Try to auto-answer question in real time (provisional — may update again)
