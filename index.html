@@ -2655,7 +2655,9 @@ window.testApiConnection = async function(btn){
 
 function calcMatchPts(p, rh, ra, qr, rp, isNewSystem, allPicks){
   const exact = p.h===rh && p.a===ra;
-  const diffOk = !exact && (rh-ra) === (p.h-p.a);
+  // diffOk only applies in new system
+  const diffOk = isNewSystem && !exact && (rh-ra) === (p.h-p.a);
+  // winOk: in old system, diffOk is not excluded (acertar dif goles cuenta como ganar en sistema viejo)
   const winOk = !exact && !diffOk && ((p.h>p.a&&rh>ra)||(p.h<p.a&&rh<ra)||(p.h===p.a&&rh===ra));
   const qOk = p.extra===qr ? 1 : 0;
   let pts = 0;
@@ -2671,9 +2673,11 @@ function calcMatchPts(p, rh, ra, qr, rp, isNewSystem, allPicks){
   } else {
     if(exact)   pts = rp.e;
     else if(winOk) pts = rp.w;
+    // In old system: if diffOk but not exact, it still counts as winOk
+    else if(!isNewSystem && !exact && ((p.h>p.a&&rh>ra)||(p.h<p.a&&rh<ra)||(p.h===p.a&&rh===ra))) pts = rp.w;
   }
   if(qOk) pts += rp.x;
-  const ok = (exact||diffOk||winOk) ? 1 : 0;
+  const ok = (exact||winOk||(!isNewSystem&&diffOk&&((p.h>p.a&&rh>ra)||(p.h<p.a&&rh<ra)||(p.h===p.a&&rh===ra)))) ? 1 : 0;
   const ex = exact ? 1 : 0;
   const cat = exact?"exact":diffOk?"diff":winOk?"win":"none";
   return {pts, ok, ex, qOk, cat};
