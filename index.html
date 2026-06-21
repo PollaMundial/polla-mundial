@@ -965,6 +965,13 @@ const MATCHES = M_RAW.map(m => {
   return { ...m, date: local.date, time: local.time, dateKey: local.dateKey };
 });
 
+// Get kickoff timestamp — times are stored in Argentina timezone (UTC-3)
+function getKoTime(m){
+  if(!m.aDate||!m.aTime||m.aTime==="s/h") return null;
+  // Use ISO string with explicit -03:00 offset — most reliable across browsers
+  return new Date(m.aDate + 'T' + m.aTime + ':00-03:00').getTime();
+}
+
 // ── STATE ──
 let CUR = { uid:null, dname:null, photo:null, pollaId:null, pollaName:null, pollaDname:null, isOwner:false };
 let pollaLive = {};
@@ -1359,7 +1366,7 @@ function renderTodayBar(){
   const hasAction = todayMs.some(m=>{
     const r=results[m.id];
     if(r?.locked || r?.live) return false; // ignore finished and live
-    const ko = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
+    const ko = getKoTime(m);
     if(Date.now() >= ko) return false; // past kick-off, picks already closed
     const p=myPicks[m.id];
     const hasPick=p&&(p.h>0||p.a>0||p.extra);
@@ -1376,7 +1383,7 @@ function renderTodayBar(){
     const isLive=!!r?.live; const isDone=!!r?.locked;
     const p=myPicks[m.id]; const hasPick=p&&(p.h>0||p.a>0||p.extra);
     const cls=isDone?"finished":isLive?"live":hasPick?"done":"pending";
-    const stLabel=isDone?"Terminado":isLive?"🔴 En vivo":hasPick?"✓ Listo":"Pendiente";
+    const stLabel=isDone?"Terminado":isLive?"🔴 En vivo":hasPick?"✓ Pronóstico listo":"Sin pronóstico";
     const tLabel=isLive?(r.min?r.min+"'":"Live"):m.time;
     return`<div class="tpill ${cls}" onclick="scrollToMatch(${m.id})">
       <div class="tdot ${cls}"></div>
@@ -1472,7 +1479,7 @@ function buildCard(m,result){
     <div class="extrasec">
       <div class="extlbl">❓ Pregunta extra · <span class="lkbadge">Resp: ${result.qr||"—"}</span></div>
       <div class="extq">${m.q}</div>
-      ${picks.length?`<div class="rcard"><div class="rtitle">📊 Predicciones de todos</div>${oh}</div>`:""}
+      ${picks.length?`<div class="rcard"><div class="rtitle">📊 Pronósticos de todos</div>${oh}</div>`:""}
     </div>`;
     d.style.cursor="pointer";
     d.onclick=()=>openMatchModal(m,result,picks);
@@ -1498,18 +1505,18 @@ function buildCard(m,result){
         <div style="font-size:14px;font-weight:700;color:${result.qr?'var(--gd)':'var(--t2)'}">${result.qr?'Resp. en vivo: '+result.qr:'Sin respuesta aún'}</div>
       </div>
       ${hasPick?`<div style="display:flex;align-items:center;justify-content:space-between;border:0.5px solid var(--bor);border-radius:var(--rs);padding:8px 12px">
-        <span style="font-size:14px;font-weight:700;color:var(--t1)">Tu pick</span>
+        <span style="font-size:14px;font-weight:700;color:var(--t1)">Tu pronóstico</span>
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:14px;font-weight:700;color:${myLivePts>0?'var(--gd)':'var(--t2)'}">${myPick.h??'—'}–${myPick.a??'—'}</span>
           <span style="font-size:13px;color:var(--t2)">${myPick.extra||'—'}</span>
           <span style="font-size:14px;font-weight:700;color:${myLivePts>0?'var(--gd)':'var(--t3)'}">+${myLivePts}</span>
         </div>
       </div>`:`<div style="font-size:12px;color:var(--rd)">⚠️ No pusiste pronóstico para este partido.</div>`}
-      <div style="font-size:12px;color:var(--t3);margin-top:8px;text-align:center">🔒 Picks cerrados — ve a En vivo para ver todos</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:8px;text-align:center">🔒 Pronósticos cerrados — ve a En vivo para ver todos</div>
     </div>`;
   } else {
     // Auto-lock: if kick-off time has passed, treat as read-only (picks closed)
-    const koTime = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
+    const koTime = getKoTime(m);
     const isKOPassed = Date.now() >= koTime;
     if(isKOPassed){
       d.innerHTML=`<div class="mmeta"><span class="mmeta-l">📅 ${m.date} · ${m.time}</span><span class="rbadge ${rb}">${rl}</span></div>
@@ -1520,7 +1527,7 @@ function buildCard(m,result){
       </div>
       <div class="extrasec">
         <div class="extlbl">❓ ${m.q}</div>
-        <div class="locknotice" style="margin-top:6px">🔒 Picks cerrados — el partido ya comenzó</div>
+        <div class="locknotice" style="margin-top:6px">🔒 Pronósticos cerrados — el partido ya comenzó</div>
       </div>`;
       return d;
     }
@@ -1677,7 +1684,7 @@ function renderLive(){
       </div>`;
     }).join("");
     let picksBlock = "";
-    if(picks.length) picksBlock = '<div class="rcard"><div class="rtitle" style="margin-bottom:6px">📊 Predicciones · puntos si termina así</div>' + oh + '</div>';
+    if(picks.length) picksBlock = '<div class="rcard"><div class="rtitle" style="margin-bottom:6px">📊 Pronósticos · puntos si termina así</div>' + oh + '</div>';
     const homeDisplay=(m.ph!=="Grupos"&&r?.homeTeam&&!r.homeTeam.includes("TBD"))?r.homeTeam:m.home;
     const awayDisplay=(m.ph!=="Grupos"&&r?.awayTeam&&!r.awayTeam.includes("TBD"))?r.awayTeam:m.away;
     const div=document.createElement("div"); div.className="live-card";
@@ -1780,7 +1787,7 @@ function renderMyPicks(){
         <div class="pick-pts ${ptsCls}">+${myPts}pts</div>
       </div>
       <div class="pick-body">
-        <div class="rtitle" style="margin-bottom:6px">Resultado de todos</div>
+        <div class="rtitle" style="margin-bottom:6px">Pronósticos de todos</div>
         ${picksHtml}
       </div>
     </div>`;
@@ -1801,7 +1808,7 @@ function buildGlobal(){
     name:m.dname||"?",g:m.globals||{},me:uid===CUR.uid
   })).filter(x=>x.g.campeon||x.g.goleador).sort((a,b)=>b.me-a.me);
   const allPicksHtml=(!isOpen&&allGlobals.length)?`
-    <div class="slbl" style="margin-top:14px">Predicciones de todos</div>
+    <div class="slbl" style="margin-top:14px">Pronósticos de todos</div>
     <div class="card">`+allGlobals.map(x=>`
       <div class="rrow" style="flex-direction:column;align-items:flex-start;gap:5px;padding:10px 0">
         <div style="font-size:13px;font-weight:700;color:${x.me?"var(--bm)":"var(--t1)"}">${x.name}${x.me?" (tú)":""}</div>
@@ -2135,7 +2142,7 @@ function buildAdminMatchSelector(){
   const available = MATCHES
     .sort((a,b) => new Date(a.aDate+' '+a.aTime) - new Date(b.aDate+' '+b.aTime))
     .filter(m => {
-      const ko = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
+      const ko = getKoTime(m);
       return ko <= Date.now() + 48*60*60*1000; // today + next 48h
     });
   sel.innerHTML = `<option value="">— Selecciona un partido —</option>` +
@@ -2195,7 +2202,7 @@ window.adminLockAndLive = async function(btn){
       live: true, locked: false,
       homeTeam: m.home, awayTeam: m.away, min: 0
     });
-    btn.textContent = "✅ Partido en vivo — picks cerrados";
+    btn.textContent = "✅ Partido en vivo — pronósticos cerrados";
     setTimeout(()=>{ btn.textContent="🔒 Cerrar picks y poner en vivo"; buildAdminMatchSelector(); }, 2000);
   } catch(e){ btn.textContent = "⚠️ Error: "+e.message; setTimeout(()=>{ btn.textContent="🔒 Cerrar picks y poner en vivo"; },2000); }
 };
@@ -3315,7 +3322,7 @@ function renderMultiPollaPanel(pollaData){
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
   const activeMatches = MATCHES.filter(m => {
     if(m.aTime==="s/h") return false;
-    const ko = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
+    const ko = getKoTime(m);
     const diffH = (ko - now) / 3600000;
     // Include: past 6h (may still be live), today, and tomorrow
     return diffH > -6 && (m.aDate===todayStr || m.aDate===tomorrowStr || diffH < 26);
@@ -3468,24 +3475,29 @@ Pregunta extra: ${s.extra}`)) return;
 
 
 // ── AUTO LIVE AT KICKOFF ──
+
+
 function startAutoLiveCheck(){
-  // Every 30s, check if any match has passed kickoff but isn't live yet — mark it live
+  // Mark matches as live when kickoff time is reached
+  // Only owner writes to Firebase to avoid race conditions
   setInterval(async ()=>{
-    if(!CUR.pollaId || !CUR.isOwner) return; // only owner writes to avoid spam
+    if(!CUR.pollaId || !CUR.isOwner) return;
     const results = pollaLive.results||{};
     const now = Date.now();
     for(const m of MATCHES){
       if(m.aTime==="s/h") continue;
       const r = results[m.id];
-      if(r?.locked || r?.live) continue; // already handled
-      const ko = new Date(m.aDate+'T'+m.aTime+':00-03:00').getTime();
-      if(now >= ko && now - ko < 120*60*1000){ // within 2h of kickoff
+      if(r?.locked || r?.live) continue;
+      const ko = getKoTime(m);
+      if(!ko) continue;
+      // Only activate within a 5 min window AFTER kickoff (not before, not 2h window)
+      if(now >= ko && now - ko < 5*60*1000){
         try{
           await update(ref(db,`pollas/${CUR.pollaId}/results/${m.id}`),{
             live:true, locked:false, h:r?.h||0, a:r?.a||0,
             homeTeam:m.home, awayTeam:m.away, min:0
           });
-          console.log(`[AUTO] Match ${m.home} vs ${m.away} marked live at kickoff`);
+          console.log(`[AUTO] ${m.home} vs ${m.away} marked live at kickoff`);
         }catch(e){}
       }
     }
