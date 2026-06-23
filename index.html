@@ -1291,11 +1291,12 @@ function subscribeFirebase(){
 function renderAll(){
   renderMatches(); renderLive(); renderLB(); renderTodayBar(); renderMyPicks(); updateBanner(); updateGlobalReminderBar();
   buildGlobal();
+  // Always rebuild cruces so bracket is current when tab opens
+  renderGroupTable(curGroup);
+  buildCruces();
   if(document.getElementById("tc-mundial").classList.contains("active")){
-    renderGroupTable(curGroup);
-    buildCruces();
     seedScorers();
-  buildScorers();
+    buildScorers();
   }
 }
 window.goToGlobal=function(){
@@ -1981,37 +1982,213 @@ function renderGroupTable(g){
   }).join("");
   document.getElementById("grp-table").innerHTML=`<div class="card"><table class="gtable"><tr><th>Selección</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>${rows}</table><div style="font-size:11px;color:var(--t2);background:var(--bg);border-radius:var(--rs);padding:9px 11px;margin-top:8px;border:1px solid var(--bor)"><span style="color:var(--gd);font-weight:700">Verde</span> clasifica · <span style="color:var(--am);font-weight:700">⭐ Top 8</span> entre mejores 8 terceros · <span style="color:var(--rd);font-weight:700">Fuera</span> eliminado</div></div>`;
 }
+// FIFA 2026 R32 bracket — fixed matchups (from regulations)
+// Format: [matchId, homeSlot, awaySlot, date, time, venue]
+const R32 = [
+  [73, "1E",  "3ABCDF", "2026-06-28", "16:00", "Los Ángeles"],
+  [74, "1I",  "3CDFGH", "2026-06-29", "14:00", "Houston"],
+  [75, "2A",  "2B",     "2026-06-29", "17:30", "Boston"],
+  [76, "1F",  "2C",     "2026-06-29", "22:00", "Monterrey"],
+  [77, "2K",  "2L",     "2026-06-30", "14:00", "Toronto"],
+  [78, "1H",  "2J",     "2026-06-30", "18:00", "Miami"],
+  [79, "1D",  "3BEFIJ", "2026-06-30", "22:00", "Cd. México"],
+  [80, "1G",  "3AEHIJ", "2026-07-01", "13:00", "Seattle"],
+  [81, "1C",  "2F",     "2026-07-01", "17:00", "Nueva York"],
+  [82, "2E",  "2I",     "2026-07-01", "21:00", "Dallas"],
+  [83, "1A",  "3CEFHI", "2026-07-02", "s/h",   "Atlanta"],
+  [84, "1L",  "3EHIJK", "2026-07-02", "s/h",   "Boston"],
+  [85, "1J",  "2H",     "2026-07-02", "s/h",   "Dallas"],
+  [86, "2D",  "2G",     "2026-07-03", "15:00", "Filadelfia"],
+  [87, "1B",  "3EFGIJ", "2026-07-03", "19:00", "Vancouver"],
+  [88, "1K",  "3DEIJL", "2026-07-03", "22:30", "Kansas City"],
+];
+const R16 = [
+  [89, 73, 75, "2026-07-05", "14:00", "Houston"],
+  [90, 74, 77, "2026-07-05", "18:00", "Filadelfia"],
+  [91, 76, 78, "2026-07-05", "17:00", "Nueva York"],
+  [92, 79, 80, "2026-07-05", "21:00", "Cd. México"],
+  [93, 81, 82, "2026-07-06", "16:00", "Seattle"],
+  [94, 83, 84, "2026-07-06", "21:00", "Dallas"],
+  [95, 85, 86, "2026-07-07", "17:00", "Vancouver"],
+  [96, 87, 88, "2026-07-07", "21:00", "Atlanta"],
+];
+const QF = [
+  [97, 89, 90, "2026-07-11", "13:00", "Atlanta"],
+  [98, 91, 92, "2026-07-11", "17:00", "Atlanta"],
+  [99, 93, 94, "2026-07-12", "17:00", "Seattle"],
+  [100,95, 96, "2026-07-12", "21:00", "Nueva York"],
+];
+const SF = [
+  [101, 97, 98,  "2026-07-15", "21:00", "Atlanta"],
+  [102, 99, 100, "2026-07-16", "21:00", "Dallas"],
+];
+
+// Get real team for a bracket slot using current standings
+function slotToTeam(slot, standings, top8thirds){
+  const m = slot.match(/^([12])([A-L])$/);
+  if(m){
+    const pos = parseInt(m[1])-1;
+    const grp = m[2];
+    const st = standings[grp];
+    if(st && st[pos] && st[pos].pj > 0) return {name:st[pos].n, flag:st[pos].f, confirmed:st[pos].pj===3};
+    return null;
+  }
+  // Third place slot e.g. "3ABCDF"
+  const tm = slot.match(/^3([A-L]+)$/);
+  if(tm){
+    const groups = tm[1].split("");
+    const candidates = top8thirds.filter(t=>groups.includes(t.grp));
+    if(candidates.length > 0) return {name:candidates[0].n, flag:candidates[0].f, confirmed:false};
+    return null;
+  }
+  return null;
+}
+
 function buildCruces(){
-  const secs=[
-    {t:"🔵 16avos de Final",items:[
-      {n:"P73",h:"1° E",a:"3° ABCDF",d:"Dom 28 Jun",t:"16:00",s:"Los Ángeles"},{n:"P74",h:"1° I",a:"3° CDFGH",d:"Lun 29 Jun",t:"14:00",s:"Houston"},
-      {n:"P75",h:"2° A",a:"2° B",d:"Lun 29 Jun",t:"17:30",s:"Boston"},{n:"P76",h:"1° F",a:"2° C",d:"Lun 29 Jun",t:"22:00",s:"Monterrey"},
-      {n:"P77",h:"2° K",a:"2° L",d:"Mar 30 Jun",t:"14:00",s:"Toronto"},{n:"P78",h:"1° H",a:"2° J",d:"Mar 30 Jun",t:"18:00",s:"Miami"},
-      {n:"P79",h:"1° D",a:"3° BEFIJ",d:"Mar 30 Jun",t:"22:00",s:"Cd. México"},{n:"P80",h:"1° G",a:"3° AEHIJ",d:"Mié 1 Jul",t:"13:00",s:"Seattle"},
-      {n:"P81",h:"1° C",a:"2° F",d:"Mié 1 Jul",t:"17:00",s:"Nueva York"},{n:"P82",h:"2° E",a:"2° I",d:"Mié 1 Jul",t:"21:00",s:"Dallas"},
-      {n:"P83",h:"1° A",a:"3° CEFHI",d:"Jue 2 Jul",t:"s/h",s:"Atlanta"},{n:"P84",h:"1° L",a:"3° EHIJK",d:"Jue 2 Jul",t:"s/h",s:"Boston"},
-      {n:"P85",h:"1° J",a:"2° H",d:"Jue 2 Jul",t:"s/h",s:"Dallas"},{n:"P86",h:"2° D",a:"2° G",d:"Vie 3 Jul",t:"15:00",s:"Filadelfia"},
-      {n:"P87",h:"1° B",a:"3° EFGIJ",d:"Vie 3 Jul",t:"19:00",s:"Vancouver"},{n:"P88",h:"1° K",a:"3° DEIJL",d:"Vie 3 Jul",t:"22:30",s:"Kansas City"},
-    ]},
-    {t:"🟢 Octavos",items:[{n:"P89",h:"Gan.P73",a:"Gan.P75",d:"Sáb 4 Jul",t:"14:00",s:"Houston"},{n:"P90",h:"Gan.P74",a:"Gan.P77",d:"Sáb 4 Jul",t:"18:00",s:"Filadelfia"},{n:"P91",h:"Gan.P76",a:"Gan.P78",d:"Dom 5 Jul",t:"17:00",s:"Nueva York"},{n:"P92",h:"Gan.P79",a:"Gan.P80",d:"Dom 5 Jul",t:"21:00",s:"Cd. México"},{n:"P93",h:"Gan.P81",a:"Gan.P82",d:"Lun 6 Jul",t:"16:00",s:"Seattle"},{n:"P94",h:"Gan.P83",a:"Gan.P84",d:"Lun 6 Jul",t:"21:00",s:"Dallas"},{n:"P95",h:"Gan.P85",a:"Gan.P86",d:"Mar 7 Jul",t:"17:00",s:"Vancouver"},{n:"P96",h:"Gan.P87",a:"Gan.P88",d:"Mar 7 Jul",t:"21:00",s:"Atlanta"}]},
-    {t:"🟡 Cuartos",items:[{n:"P97",h:"Gan.P89",a:"Gan.P90",d:"Vie 11 Jul",t:"13:00",s:"Atlanta"},{n:"P98",h:"Gan.P91",a:"Gan.P92",d:"Vie 11 Jul",t:"17:00",s:"Atlanta"},{n:"P99",h:"Gan.P93",a:"Gan.P94",d:"Sáb 12 Jul",t:"17:00",s:"Seattle"},{n:"P100",h:"Gan.P95",a:"Gan.P96",d:"Sáb 12 Jul",t:"21:00",s:"Nueva York"}]},
-    {t:"🔴 Semifinales",items:[{n:"P101",h:"Gan.P97",a:"Gan.P98",d:"Mié 15 Jul",t:"21:00",s:"Atlanta"},{n:"P102",h:"Gan.P99",a:"Gan.P100",d:"Jue 16 Jul",t:"21:00",s:"Dallas"}]},
-    {t:"🥉 3er Puesto",items:[{n:"P103",h:"Per.P101",a:"Per.P102",d:"Vie 18 Jul",t:"17:00",s:"Miami"}]},
-    {t:"🏆 Gran Final",items:[{n:"P104",h:"Gan.P101",a:"Gan.P102",d:"Dom 19 Jul",t:"21:00",s:"Nueva York/Nueva Jersey"}]},
-  ];
-  const results=pollaLive.results||{};
-  document.getElementById("ms-cruces").innerHTML=secs.map(sec=>`
-    <div class="sdiv"><span>${sec.t}</span></div>
-    <div class="card">${sec.items.map(p=>{
-      const mid=parseInt(p.n.replace("P",""));
-      const r=results[mid];
-      // Use API team names when available, fall back to bracket notation
-      const homeL=r?.homeTeam&&!r.homeTeam.includes("TBD")?r.homeTeam:p.h;
-      const awayL=r?.awayTeam&&!r.awayTeam.includes("TBD")?r.awayTeam:p.a;
-      const score=r?.locked?` <strong>${r.h}–${r.a}</strong>`:"";
-      const localT=p.t&&p.t!=="s/h"?toLocal("2026-06-28",p.t).time:"s/h";
-      return`<div class="bm-item"><span class="bm-num">${p.n}</span><span class="bm-teams">${homeL} vs ${awayL}${score}</span><div class="bm-right"><div class="bm-date">${p.d}${localT!=="s/h"?" · "+localT:""}</div><div class="bm-sede">${p.s}</div></div></div>`;
-    }).join("")}</div>`).join("");
+  const standings = calcStandings();
+  const top8 = calcTop8(standings);
+  const results = pollaLive.results||{};
+
+  // Build top8thirds array sorted by qualification criteria
+  const thirds = Object.entries(standings).map(([grp, teams])=>{
+    const t = teams[2];
+    return t ? {...t, grp} : null;
+  }).filter(Boolean);
+  const top8thirds = thirds
+    .filter(t=>top8.has(t.n))
+    .sort((a,b)=>b.pts-a.pts||b.gf-b.gc-(a.gf-a.gc)||b.gf-a.gf);
+
+  // Helper to get team display for a match slot
+  function getTeamDisplay(slot){
+    const team = slotToTeam(slot, standings, top8thirds);
+    if(!team) return `<span style="color:var(--t3);font-size:13px">${slot}</span>`;
+    const conf = team.confirmed?"":"?";
+    return `<span style="font-size:14px">${team.flag}</span><span style="font-size:13px;font-weight:${team.confirmed?700:400}">${team.name}${conf}</span>`;
+  }
+
+  // Helper to get winner display for knockout matches
+  function getKnockoutTeam(matchId, side){
+    const r = results[matchId];
+    if(!r?.locked) return `<span style="color:var(--t3);font-size:13px">Gan. P${matchId}</span>`;
+    const winner = side==="h" ? r.homeTeam : r.awayTeam;
+    const flag = getTeamFlag(winner);
+    return `<span style="font-size:14px">${flag}</span><span style="font-size:13px;font-weight:700">${winner}</span>`;
+  }
+  function getLoserTeam(matchId){
+    const r = results[matchId];
+    if(!r?.locked) return `<span style="color:var(--t3);font-size:13px">Per. P${matchId}</span>`;
+    const loser = r.h > r.a ? r.awayTeam : r.homeTeam;
+    const flag = getTeamFlag(loser);
+    return `<span style="font-size:14px">${flag}</span><span style="font-size:13px;font-weight:700">${loser}</span>`;
+  }
+
+  function matchCard(mid, homeDisplay, awayDisplay, date, time, venue){
+    const r = results[mid];
+    const score = r?.locked ? `<span style="font-size:15px;font-weight:800;color:var(--bm);margin:0 4px">${r.h}–${r.a}</span>` : "";
+    const localT = time && time!=="s/h" ? toLocal(date, time).time : "s/h";
+    const dateStr = new Date(date+"T12:00:00").toLocaleDateString("es", {weekday:"short",day:"numeric",month:"short"});
+    const isLive = r?.live;
+    return `<div class="bm-item" style="${isLive?"border-left:3px solid var(--rd)":""}">
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px">${homeDisplay}${score}</div>
+        <div style="display:flex;align-items:center;gap:6px">${awayDisplay}</div>
+      </div>
+      <div class="bm-right">
+        <div class="bm-date">${dateStr}${localT!=="s/h"?" · "+localT:""}</div>
+        <div class="bm-sede">${venue}</div>
+        ${isLive?`<div style="font-size:10px;color:var(--rd);font-weight:700">🔴 EN VIVO</div>`:""}
+      </div>
+    </div>`;
+  }
+
+  let html = "";
+
+  // R32
+  html += `<div class="sdiv"><span>🔵 16avos de Final</span></div><div class="card">`;
+  for(const [mid, hSlot, aSlot, date, time, venue] of R32){
+    const r = results[mid];
+    let homeD, awayD;
+    if(r?.locked){
+      homeD = `<span style="font-size:14px">${getTeamFlag(r.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r.homeTeam}</span>`;
+      awayD = `<span style="font-size:14px">${getTeamFlag(r.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r.awayTeam}</span>`;
+    } else {
+      homeD = getTeamDisplay(hSlot);
+      awayD = getTeamDisplay(aSlot);
+    }
+    html += matchCard(mid, homeD, awayD, date, time, venue);
+  }
+  html += `</div>`;
+
+  // R16
+  html += `<div class="sdiv"><span>🟢 Octavos de Final</span></div><div class="card">`;
+  for(const [mid, m1, m2, date, time, venue] of R16){
+    const r = results[mid];
+    const r1 = results[m1], r2 = results[m2];
+    let homeD, awayD;
+    if(r?.locked){
+      homeD = `<span style="font-size:14px">${getTeamFlag(r.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r.homeTeam}</span>`;
+      awayD = `<span style="font-size:14px">${getTeamFlag(r.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r.awayTeam}</span>`;
+    } else {
+      homeD = r1?.locked ? getKnockoutTeam(m1, r1.h>=r1.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m1}</span>`;
+      awayD = r2?.locked ? getKnockoutTeam(m2, r2.h>=r2.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m2}</span>`;
+    }
+    html += matchCard(mid, homeD, awayD, date, time, venue);
+  }
+  html += `</div>`;
+
+  // QF
+  html += `<div class="sdiv"><span>🟡 Cuartos de Final</span></div><div class="card">`;
+  for(const [mid, m1, m2, date, time, venue] of QF){
+    const r = results[mid];
+    const r1 = results[m1], r2 = results[m2];
+    let homeD, awayD;
+    if(r?.locked){
+      homeD = `<span style="font-size:14px">${getTeamFlag(r.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r.homeTeam}</span>`;
+      awayD = `<span style="font-size:14px">${getTeamFlag(r.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r.awayTeam}</span>`;
+    } else {
+      homeD = r1?.locked ? getKnockoutTeam(m1, r1.h>=r1.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m1}</span>`;
+      awayD = r2?.locked ? getKnockoutTeam(m2, r2.h>=r2.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m2}</span>`;
+    }
+    html += matchCard(mid, homeD, awayD, date, time, venue);
+  }
+  html += `</div>`;
+
+  // SF
+  html += `<div class="sdiv"><span>🔴 Semifinales</span></div><div class="card">`;
+  for(const [mid, m1, m2, date, time, venue] of SF){
+    const r = results[mid];
+    const r1 = results[m1], r2 = results[m2];
+    let homeD, awayD;
+    if(r?.locked){
+      homeD = `<span style="font-size:14px">${getTeamFlag(r.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r.homeTeam}</span>`;
+      awayD = `<span style="font-size:14px">${getTeamFlag(r.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r.awayTeam}</span>`;
+    } else {
+      homeD = r1?.locked ? getKnockoutTeam(m1, r1.h>=r1.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m1}</span>`;
+      awayD = r2?.locked ? getKnockoutTeam(m2, r2.h>=r2.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m2}</span>`;
+    }
+    html += matchCard(mid, homeD, awayD, date, time, venue);
+  }
+  html += `</div>`;
+
+  // 3rd place
+  html += `<div class="sdiv"><span>🥉 3er Puesto</span></div><div class="card">`;
+  const r103 = results[103];
+  html += matchCard(103,
+    r103?.locked ? `<span style="font-size:14px">${getTeamFlag(r103.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r103.homeTeam}</span>` : getLoserTeam(101),
+    r103?.locked ? `<span style="font-size:14px">${getTeamFlag(r103.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r103.awayTeam}</span>` : getLoserTeam(102),
+    "2026-07-18", "17:00", "Miami");
+  html += `</div>`;
+
+  // Final
+  html += `<div class="sdiv"><span>🏆 Gran Final</span></div><div class="card">`;
+  const r104 = results[104];
+  html += matchCard(104,
+    r104?.locked ? `<span style="font-size:14px">${getTeamFlag(r104.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r104.homeTeam}</span>` : getKnockoutTeam(101, results[101]?.h>=results[101]?.a?"h":"a"),
+    r104?.locked ? `<span style="font-size:14px">${getTeamFlag(r104.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r104.awayTeam}</span>` : getKnockoutTeam(102, results[102]?.h>=results[102]?.a?"h":"a"),
+    "2026-07-19", "21:00", "Nueva York / Nueva Jersey");
+  html += `</div>`;
+
+  document.getElementById("ms-cruces").innerHTML = html;
 }
 const TEAM_FLAGS = {
   "Mexico":"🇲🇽","United States":"🇺🇸","Canada":"🇨🇦","Argentina":"🇦🇷","Brazil":"🇧🇷",
@@ -2879,23 +3056,25 @@ window.adminRecalcMatch = async function(btn){
 };
 // Manual scorer list — source of truth until ESPN takes over
 const MANUAL_SCORERS = [
-    {n:"Lionel Messi",         t:"Argentina",              f:"🇦🇷", g:3},
-    {n:"Kylian Mbappé",        t:"France",                 f:"🇫🇷", g:2},
-    {n:"Erling Haaland",       t:"Norway",                 f:"🇳🇴", g:2},
-    {n:"Folarin Balogun",      t:"United States",          f:"🇺🇸", g:2},
+    {n:"Lionel Messi",         t:"Argentina",              f:"🇦🇷", g:5},
+    {n:"Kylian Mbappé",        t:"France",                 f:"🇫🇷", g:4},
+    {n:"Erling Haaland",       t:"Norway",                 f:"🇳🇴", g:4},
+    {n:"Jonathan David",       t:"Canada",                 f:"🇨🇦", g:3},
+    {n:"Deniz Undav",          t:"Germany",                f:"🇩🇪", g:3},
+    {n:"Harry Kane",           t:"England",                f:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", g:2},
+    {n:"Cyle Larin",           t:"Canada",                 f:"🇨🇦", g:2},
+    {n:"Mikel Oyarzabal",      t:"Spain",                  f:"🇪🇸", g:2},
+    {n:"Ismaila Sarr",         t:"Senegal",                f:"🇸🇳", g:2},
     {n:"Kai Havertz",          t:"Germany",                f:"🇩🇪", g:2},
-    {n:"Yasin Ayari",          t:"Sweden",                 f:"🇸🇪", g:2},
-    {n:"Elijah Just",          t:"New Zealand",            f:"🇳🇿", g:2},
     {n:"Julián Quiñones",      t:"Mexico",                 f:"🇲🇽", g:1},
     {n:"Raúl Jiménez",         t:"Mexico",                 f:"🇲🇽", g:1},
     {n:"Ladislav Krejčí",      t:"Czechia",                f:"🇨🇿", g:1},
     {n:"Hwang In-Beom",        t:"South Korea",            f:"🇰🇷", g:1},
     {n:"Oh Hyeon-Gyu",         t:"South Korea",            f:"🇰🇷", g:1},
     {n:"Jovo Lukić",           t:"Bosnia and Herzegovina", f:"🇧🇦", g:1},
-    {n:"Cyle Larin",           t:"Canada",                 f:"🇨🇦", g:2},
-    {n:"Jonathan David",        t:"Canada",                 f:"🇨🇦", g:3},
     {n:"Maurício",             t:"Paraguay",               f:"🇵🇾", g:1},
     {n:"Giovanni Reyna",       t:"United States",          f:"🇺🇸", g:1},
+    {n:"Folarin Balogun",      t:"United States",          f:"🇺🇸", g:2},
     {n:"Breel Embolo",         t:"Switzerland",            f:"🇨🇭", g:1},
     {n:"Boualem Khoukhi",      t:"Qatar",                  f:"🇶🇦", g:1},
     {n:"Ismael Saibari",       t:"Morocco",                f:"🇲🇦", g:1},
@@ -2906,7 +3085,6 @@ const MANUAL_SCORERS = [
     {n:"Felix Nmecha",         t:"Germany",                f:"🇩🇪", g:1},
     {n:"Jamal Musiala",        t:"Germany",                f:"🇩🇪", g:1},
     {n:"Nathaniel Brown",      t:"Germany",                f:"🇩🇪", g:1},
-    {n:"Deniz Undav",          t:"Germany",                f:"🇩🇪", g:1},
     {n:"Livano Comenencia",    t:"Curacao",                f:"🇨🇼", g:1},
     {n:"Virgil van Dijk",      t:"Netherlands",            f:"🇳🇱", g:1},
     {n:"Crysencio Summerville",t:"Netherlands",            f:"🇳🇱", g:1},
@@ -2917,6 +3095,8 @@ const MANUAL_SCORERS = [
     {n:"Mattias Svanberg",     t:"Sweden",                 f:"🇸🇪", g:1},
     {n:"Alexander Isak",       t:"Sweden",                 f:"🇸🇪", g:1},
     {n:"Viktor Gyökeres",      t:"Sweden",                 f:"🇸🇪", g:1},
+    {n:"Yasin Ayari",          t:"Sweden",                 f:"🇸🇪", g:2},
+    {n:"Elijah Just",          t:"New Zealand",            f:"🇳🇿", g:2},
     {n:"Emam Ashour",          t:"Egypt",                  f:"🇪🇬", g:1},
     {n:"Mohammad Mohebbi",     t:"Iran",                   f:"🇮🇷", g:1},
     {n:"Ramin Rezaeian",       t:"Iran",                   f:"🇮🇷", g:1},
