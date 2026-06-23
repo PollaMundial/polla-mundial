@@ -1983,252 +1983,234 @@ function renderGroupTable(g){
   }).join("");
   document.getElementById("grp-table").innerHTML=`<div class="card"><table class="gtable"><tr><th>Selección</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>${rows}</table><div style="font-size:11px;color:var(--t2);background:var(--bg);border-radius:var(--rs);padding:9px 11px;margin-top:8px;border:1px solid var(--bor)"><span style="color:var(--gd);font-weight:700">Verde</span> clasifica · <span style="color:var(--am);font-weight:700">⭐ Top 8</span> entre mejores 8 terceros · <span style="color:var(--rd);font-weight:700">Fuera</span> eliminado</div></div>`;
 }
-// FIFA 2026 bracket — complete R32 structure
-const BRACKET = {
-  R32: [
-    {id:73,  h:"1° E",   a:"3° A/B/C/D/F"},
-    {id:74,  h:"1° I",   a:"3° C/D/F/G/H"},
-    {id:75,  h:"2° A",   a:"2° B"},
-    {id:76,  h:"1° F",   a:"2° C"},
-    {id:77,  h:"2° K",   a:"2° L"},
-    {id:78,  h:"1° H",   a:"2° J"},
-    {id:79,  h:"1° D",   a:"3° B/E/F/I/J"},
-    {id:80,  h:"1° G",   a:"3° A/E/H/I/J"},
-    {id:81,  h:"1° C",   a:"2° F"},
-    {id:82,  h:"2° E",   a:"2° I"},
-    {id:83,  h:"1° A",   a:"3° C/E/F/H/I"},
-    {id:84,  h:"1° L",   a:"3° E/H/I/J/K"},
-    {id:85,  h:"1° J",   a:"2° H"},
-    {id:86,  h:"2° D",   a:"2° G"},
-    {id:87,  h:"1° B",   a:"3° E/F/G/I/J"},
-    {id:88,  h:"1° K",   a:"3° D/E/I/J/L"},
-  ],
-  R16: [{id:89,m1:73,m2:75},{id:90,m1:74,m2:77},{id:91,m1:76,m2:78},{id:92,m1:79,m2:80},
-        {id:93,m1:81,m2:82},{id:94,m1:83,m2:84},{id:95,m1:85,m2:86},{id:96,m1:87,m2:88}],
-  QF:  [{id:97,m1:89,m2:90},{id:98,m1:91,m2:92},{id:99,m1:93,m2:94},{id:100,m1:95,m2:96}],
-  SF:  [{id:101,m1:97,m2:98},{id:102,m1:99,m2:100}],
-  F:   {id:104,m1:101,m2:102},
-  P3:  {id:103,m1:101,m2:102},
-};
-
-const CW=160, CH=44, RG=44, ML=10, MT=28, RS=54;
-const XS=[ML, ML+CW+RG, ML+(CW+RG)*2, ML+(CW+RG)*3, ML+(CW+RG)*4];
-const TW=XS[4]+CW+ML, TH=16*RS+MT+10;
-
-function yr(i){ return MT+i*RS; }
-function cyr(i){ return yr(i)+CH/2; }
-function yr16(j){ return (cyr(j*2)+cyr(j*2+1))/2-CH/2; }
-function cyr16(j){ return yr16(j)+CH/2; }
-function yqf(k){ return (cyr16(k*2)+cyr16(k*2+1))/2-CH/2; }
-function cyqf(k){ return yqf(k)+CH/2; }
-function ysf(l){ return (cyqf(l*2)+cyqf(l*2+1))/2-CH/2; }
-function cysf(l){ return ysf(l)+CH/2; }
-const YF = (cysf(0)+cysf(1))/2-CH/2;
-
-function slotToTeamBracket(slot, standings, top8thirds){
-  const m1 = slot.match(/^([12])°\s([A-L])$/);
-  if(m1){
-    const pos=parseInt(m1[1])-1, grp=m1[2];
-    const st=standings[grp];
-    if(st&&st[pos]&&st[pos].pj>0) return {n:st[pos].n, f:st[pos].f, conf:st[pos].pj===3};
-    return null;
-  }
-  const m3=slot.match(/^3°\s([A-L/]+)$/);
-  if(m3){
-    const groups=m3[1].split("/");
-    const cands=top8thirds.filter(t=>groups.includes(t.grp));
-    if(cands.length>0) return {n:cands[0].n, f:cands[0].f, conf:false};
-    return null;
-  }
-  return null;
-}
-
-function matchWinner(r){
-  if(!r?.locked) return null;
-  if(r.h>r.a) return {n:r.homeTeam, f:getTeamFlag(r.homeTeam)};
-  if(r.a>r.h) return {n:r.awayTeam, f:getTeamFlag(r.awayTeam)};
-  return {n:r.homeTeam, f:getTeamFlag(r.homeTeam)};
-}
-function matchLoser(r){
-  if(!r?.locked) return null;
-  if(r.h<r.a) return {n:r.homeTeam, f:getTeamFlag(r.homeTeam)};
-  return {n:r.awayTeam, f:getTeamFlag(r.awayTeam)};
-}
-
-function teamLabel(team, fallback, conf){
-  if(!team) return `<tspan style="fill:var(--color-text-tertiary);font-size:10px">${fallback}</tspan>`;
-  const q = conf===false ? "" : "";
-  return `<tspan style="fill:var(--color-text-primary);font-size:11px">${team.f} ${team.n}</tspan>`;
-}
-
 function buildCruces(){
-  const standings=calcStandings();
-  const top8=calcTop8(standings);
-  const results=pollaLive.results||{};
-  const thirds=Object.entries(standings).map(([g,ts])=>ts[2]?{...ts[2],grp:g}:null).filter(Boolean);
-  const top8thirds=thirds.filter(t=>top8.has(t.n)).sort((a,b)=>b.pts-a.pts||(b.gf-b.gc)-(a.gf-a.gc));
+  // Static bracket — positional slots with dates and venues
+  // Layout: HTML divs with overflow-x scroll, two halves top/bottom
 
-  function teamFromSlot(slot){ return slotToTeamBracket(slot, standings, top8thirds); }
-  function teamFromMatch(mid){ return matchWinner(results[mid]); }
-  function loserFromMatch(mid){ return matchLoser(results[mid]); }
+  const B = {
+    // [matchId, home_slot, away_slot, date_display, time_arg, venue]
+    r32: [
+      [73,  "2° A",   "2° B",          "Dom 28 Jun","16:00","Los Ángeles"],
+      [74,  "1° E",   "3° A/B/C/D/F",  "Dom 28 Jun","20:00","Dallas"],
+      [75,  "1° F",   "2° C",          "Lun 29 Jun","16:00","Boston"],
+      [76,  "1° C",   "2° F",          "Lun 29 Jun","19:30","Nueva York"],
+      [77,  "2° K",   "2° L",          "Lun 29 Jun","22:00","Toronto"],
+      [78,  "1° H",   "2° J",          "Mar 30 Jun","16:00","Miami"],
+      [79,  "1° D",   "3° B/E/F/I/J",  "Mar 30 Jun","20:00","Guadalajara"],
+      [80,  "1° G",   "3° A/E/H/I/J",  "Mar 30 Jun","22:00","Cd. México"],
+      [81,  "2° E",   "2° I",          "Mié 1 Jul", "16:00","Dallas"],
+      [82,  "1° I",   "3° C/D/F/G/H",  "Mié 1 Jul", "20:00","Houston"],
+      [83,  "1° A",   "3° C/E/F/H/I",  "Jue 2 Jul", "16:00","Atlanta"],
+      [84,  "1° L",   "3° E/H/I/J/K",  "Jue 2 Jul", "19:00","Boston"],
+      [85,  "1° J",   "2° H",          "Jue 2 Jul", "22:00","Seattle"],
+      [86,  "2° D",   "2° G",          "Vie 3 Jul", "16:00","Filadelfia"],
+      [87,  "1° B",   "3° E/F/G/I/J",  "Vie 3 Jul", "20:00","Vancouver"],
+      [88,  "1° K",   "3° D/E/I/J/L",  "Vie 3 Jul", "22:30","Kansas City"],
+    ],
+    r16: [
+      [89,  "Gan. P73","Gan. P75","Sáb 5 Jul","14:00","Houston"],
+      [90,  "Gan. P74","Gan. P77","Sáb 5 Jul","20:00","Filadelfia"],
+      [91,  "Gan. P76","Gan. P78","Dom 6 Jul","16:00","Nueva York"],
+      [92,  "Gan. P79","Gan. P80","Dom 6 Jul","20:00","Cd. México"],
+      [93,  "Gan. P81","Gan. P82","Lun 7 Jul","16:00","Seattle"],
+      [94,  "Gan. P83","Gan. P84","Lun 7 Jul","20:00","Dallas"],
+      [95,  "Gan. P85","Gan. P86","Mar 8 Jul","16:00","Vancouver"],
+      [96,  "Gan. P87","Gan. P88","Mar 8 Jul","20:00","Atlanta"],
+    ],
+    qf: [
+      [97,  "Gan. P89","Gan. P90","Vie 11 Jul","20:00","Atlanta"],
+      [98,  "Gan. P91","Gan. P92","Vie 11 Jul","16:00","Kansas City"],
+      [99,  "Gan. P93","Gan. P94","Sáb 12 Jul","16:00","Seattle"],
+      [100, "Gan. P95","Gan. P96","Sáb 12 Jul","20:00","Nueva York"],
+    ],
+    sf: [
+      [101, "Gan. P97", "Gan. P98", "Mié 16 Jul","21:00","Atlanta"],
+      [102, "Gan. P99", "Gan. P100","Jue 17 Jul","21:00","Dallas"],
+    ],
+    p3:  [103, "Per. P101","Per. P102","Vie 18 Jul","18:00","Miami"],
+    f:   [104, "Gan. P101","Gan. P102","Dom 19 Jul","21:00","Nueva York"],
+  };
 
-  // SVG card helper
-  function card(x,y,mid,t1,t2,score,isLive){
-    const stroke=isLive?"#e63946":"var(--color-border-tertiary)";
-    const sw=isLive?1.5:0.5;
-    const t1disp = t1 ? `${t1.f} ${t1.n}` : "?";
-    const t2disp = t2 ? `${t2.f} ${t2.n}` : "?";
-    const t1col = t1 ? "var(--color-text-primary)" : "var(--color-text-tertiary)";
-    const t2col = t2 ? "var(--color-text-primary)" : "var(--color-text-tertiary)";
-    const scoreDisp = score ? ` ${score}` : "";
-    return `<rect x="${x}" y="${y}" width="${CW}" height="${CH}" rx="5" fill="var(--color-background-primary)" stroke="${stroke}" stroke-width="${sw}"/>
-<text x="${x+6}" y="${y+16}" font-size="9" fill="var(--color-text-tertiary)" font-family="var(--font-sans)">P${mid}</text>
-<text x="${x+6}" y="${y+28}" font-size="11" fill="${t1col}" font-family="var(--font-sans)">${t1disp}${score?" "+score.split("–")[0]||"":""}</text>
-<text x="${x+6}" y="${y+41}" font-size="11" fill="${t2col}" font-family="var(--font-sans)">${t2disp}${score?" "+score.split("–")[1]||"":""}</text>`;
+  // Card HTML — each team slot + meta
+  function card(mid, h, a, date, time, venue, color){
+    const localT = time && time!=="s/h" ? toLocal("2026-07-01", time).time : time;
+    return `<div style="background:var(--bg2,#fff);border:0.5px solid var(--bor);border-radius:8px;padding:7px 9px;min-width:148px;max-width:148px;flex-shrink:0">
+      <div style="font-size:9px;font-weight:600;color:${color};margin-bottom:4px;letter-spacing:.3px">P${mid}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--t1);line-height:1.4;margin-bottom:1px">${h}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--t1);line-height:1.4;margin-bottom:5px">${a}</div>
+      <div style="font-size:9px;color:var(--t3);line-height:1.4">${date} · ${localT}</div>
+      <div style="font-size:9px;color:var(--t3)">${venue}</div>
+    </div>`;
   }
 
-  // Connector line helper: right edge of source card to left edge of dest card
-  function conn(sx,sy,dx,dy){
-    const mx=(sx+dx)/2;
-    return `<path d="M${sx},${sy} H${mx} V${dy} H${dx}" fill="none" stroke="var(--color-border-secondary)" stroke-width="1"/>`;
+  // Connector — vertical line + horizontal
+  function connector(){ return `<div style="display:flex;flex-direction:column;align-items:center;width:20px;flex-shrink:0"><div style="width:0;height:50%;border-left:1.5px solid var(--bor)"></div><div style="width:20px;border-top:1.5px solid var(--bor)"></div><div style="width:0;height:50%;border-left:1.5px solid var(--bor)"></div></div>`; }
+  function arrow(){ return `<div style="width:16px;flex-shrink:0;border-top:1.5px solid var(--bor);align-self:center"></div>`; }
+
+  // Build a bracket column: pairs of cards + connector → next round card
+  function matchPair(m1, m2, nextM, round, color){
+    return `<div style="display:flex;align-items:center;gap:0">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${card(...m1,color)}
+        ${card(...m2,color)}
+      </div>
+      ${connector()}
+      ${arrow()}
+      ${card(...nextM,color)}
+    </div>`;
   }
 
-  let svg = `<svg width="${TW}" height="${TH}" viewBox="0 0 ${TW} ${TH}" xmlns="http://www.w3.org/2000/svg" style="display:block">
-<style>text{font-family:var(--font-sans)}</style>`;
+  // Top half: P73+P75→P89, P74+P77→P90, P89+P90→P97, P97→P101
+  // Bottom half: P76+P78→P91, P79+P80→P92, P91+P92→P98, P98→P101
+  // Third half: P81+P82→P93, P83+P84→P94, P93+P94→P99, P99→P102
+  // Fourth half: P85+P86→P95, P87+P88→P96, P95+P96→P100, P100→P102
+  // P101+P102→P104 FINAL
 
-  // Headers
-  const hdrs = [["16AVOS",0],["OCTAVOS",1],["CUARTOS",2],["SEMIS",3],["FINAL",4]];
-  for(const [lbl,ri] of hdrs){
-    svg += `<text x="${XS[ri]+CW/2}" y="18" text-anchor="middle" font-size="9" font-weight="500" fill="var(--color-text-secondary)" letter-spacing=".8">${lbl}</text>`;
+  const c16="#1d6ed8", c8="#16a34a", cqf="#b45309", csf="#9333ea", cf="#dc2626";
+
+  const r32=B.r32, r16=B.r16, qf=B.qf, sf=B.sf;
+
+  function section(title, pairs, rfn, color){
+    return `<div style="margin-bottom:20px">
+      <div style="font-size:10px;font-weight:600;color:${color};letter-spacing:.5px;margin-bottom:8px;text-transform:uppercase">${title}</div>
+      <div style="display:flex;flex-direction:column;gap:10px">${pairs}</div>
+    </div>`;
   }
 
-  // R32 cards + connectors to R16
-  for(let i=0;i<16;i++){
-    const m=BRACKET.R32[i];
-    const r=results[m.id];
-    const y=yr(i);
-    let t1,t2,score;
-    if(r?.locked){
-      t1={n:r.homeTeam,f:getTeamFlag(r.homeTeam)};
-      t2={n:r.awayTeam,f:getTeamFlag(r.awayTeam)};
-      score=`${r.h}–${r.a}`;
-    } else {
-      t1=teamFromSlot(m.h);
-      t2=teamFromSlot(m.a);
-    }
-    svg+=card(XS[0],y,m.id,t1,t2,score,r?.live);
-
-    // Connector to R16
-    const j=Math.floor(i/2);
-    const cy16=cyr16(j);
-    const srcY=cyr(i);
-    svg+=`<path d="M${XS[0]+CW},${srcY} H${XS[1]-4}" fill="none" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    // Vertical bar
-    if(i%2===0){
-      svg+=`<line x1="${XS[1]-4}" y1="${srcY}" x2="${XS[1]-4}" y2="${cy16}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    } else {
-      svg+=`<line x1="${XS[1]-4}" y1="${cyr(i-1)}" x2="${XS[1]-4}" y2="${srcY}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-      svg+=`<line x1="${XS[1]-4}" y1="${cy16}" x2="${XS[1]}" y2="${cy16}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    }
+  // Build each quarter of the bracket
+  function quarter(r32a, r32b, r16m, color16, color8){
+    return `<div style="display:flex;align-items:center;gap:0">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${card(...r32a, color16)}
+        ${card(...r32b, color16)}
+      </div>
+      ${connector()}
+      ${arrow()}
+      ${card(...r16m, color8)}
+    </div>`;
   }
 
-  // R16 cards
-  for(let j=0;j<8;j++){
-    const m=BRACKET.R16[j];
-    const r=results[m.id];
-    const y=yr16(j);
-    let t1,t2,score;
-    if(r?.locked){
-      t1={n:r.homeTeam,f:getTeamFlag(r.homeTeam)};
-      t2={n:r.awayTeam,f:getTeamFlag(r.awayTeam)};
-      score=`${r.h}–${r.a}`;
-    } else {
-      t1=teamFromMatch(m.m1);
-      t2=teamFromMatch(m.m2);
-    }
-    svg+=card(XS[1],y,m.id,t1,t2,score,r?.live);
-    // Connector to QF
-    const k=Math.floor(j/2);
-    const cyq=cyqf(k);
-    const srcY=cyr16(j);
-    svg+=`<path d="M${XS[1]+CW},${srcY} H${XS[2]-4}" fill="none" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    if(j%2===0){
-      svg+=`<line x1="${XS[2]-4}" y1="${srcY}" x2="${XS[2]-4}" y2="${cyq}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    } else {
-      svg+=`<line x1="${XS[2]-4}" y1="${cyr16(j-1)}" x2="${XS[2]-4}" y2="${srcY}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-      svg+=`<line x1="${XS[2]-4}" y1="${cyq}" x2="${XS[2]}" y2="${cyq}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    }
+  // Full bracket — 4 quarters feeding into 2 semis feeding into final
+  const q1 = quarter(r32[0], r32[1], r16[0], c16, c8);  // P73,P74 → P89
+  const q2 = quarter(r32[2], r32[3], r16[1], c16, c8);  // P75,P76 → P90... 
+  
+  // Wait — need correct pairing per FIFA bracket
+  // P73,P75 → P89; P74,P77 → P90; P89,P90 → P97
+  // P76,P78 → P91; P79,P80 → P92; P91,P92 → P98
+  // P81,P82 → P93; P83,P84 → P94; P93,P94 → P99
+  // P85,P86 → P95; P87,P88 → P96; P95,P96 → P100
+  // P97,P98 → P101; P99,P100 → P102; P101,P102 → P104
+
+  function halfBracket(ra, rb, rc, rd, r8a, r8b, rqf, rsf){
+    const cw = 148, gap = 20, conn_w = 36;
+    return `<div style="display:flex;align-items:center;gap:0;overflow-x:auto">
+      <!-- R32 pairs -->
+      <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+        <div style="display:flex;flex-direction:column;gap:4px">${card(...ra,c16)}${card(...rb,c16)}</div>
+        <div style="display:flex;flex-direction:column;gap:4px">${card(...rc,c16)}${card(...rd,c16)}</div>
+      </div>
+      <!-- connectors to R16 -->
+      <div style="display:flex;flex-direction:column;justify-content:space-around;width:${conn_w}px;flex-shrink:0">
+        <div style="border-top:1.5px solid var(--bor);width:100%"></div>
+        <div style="border-top:1.5px solid var(--bor);width:100%"></div>
+      </div>
+      <!-- R16 -->
+      <div style="display:flex;flex-direction:column;gap:${(148+4)*2+8-148}px;flex-shrink:0">
+        ${card(...r8a,c8)}
+        ${card(...r8b,c8)}
+      </div>
+      <!-- connector to QF -->
+      <div style="width:${conn_w}px;flex-shrink:0;border-top:1.5px solid var(--bor);align-self:center"></div>
+      <!-- QF -->
+      <div style="flex-shrink:0">${card(...rqf,cqf)}</div>
+      <!-- connector to SF -->
+      <div style="width:${conn_w}px;flex-shrink:0;border-top:1.5px solid var(--bor);align-self:center"></div>
+      <!-- SF -->
+      <div style="flex-shrink:0">${card(...rsf,csf)}</div>
+    </div>`;
   }
 
-  // QF cards
-  for(let k=0;k<4;k++){
-    const m=BRACKET.QF[k];
-    const r=results[m.id];
-    const y=yqf(k);
-    let t1,t2,score;
-    if(r?.locked){
-      t1={n:r.homeTeam,f:getTeamFlag(r.homeTeam)};
-      t2={n:r.awayTeam,f:getTeamFlag(r.awayTeam)};
-      score=`${r.h}–${r.a}`;
-    } else {
-      t1=teamFromMatch(m.m1);
-      t2=teamFromMatch(m.m2);
-    }
-    svg+=card(XS[2],y,m.id,t1,t2,score,r?.live);
-    const l=Math.floor(k/2);
-    const cys=cysf(l);
-    const srcY=cyqf(k);
-    svg+=`<path d="M${XS[2]+CW},${srcY} H${XS[3]-4}" fill="none" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    if(k%2===0){
-      svg+=`<line x1="${XS[3]-4}" y1="${srcY}" x2="${XS[3]-4}" y2="${cys}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    } else {
-      svg+=`<line x1="${XS[3]-4}" y1="${cyqf(k-1)}" x2="${XS[3]-4}" y2="${srcY}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-      svg+=`<line x1="${XS[3]-4}" y1="${cys}" x2="${XS[3]}" y2="${cys}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    }
+  const top = halfBracket(
+    r32[0], r32[1], r32[2], r32[3],  // P73,P74,P75,P77 — wait need right order
+    r16[0], r16[1], qf[0], sf[0]
+  );
+
+  // Actually let me just build it cleanly as a vertical list of connected matches
+  // grouping by which QF they feed
+  function group(label, m_r32_1, m_r32_2, m_r16, color){
+    return `
+    <div style="margin-bottom:16px">
+      <div style="font-size:9px;font-weight:600;color:${color};margin-bottom:6px;letter-spacing:.5px">${label}</div>
+      <div style="display:flex;align-items:stretch;gap:0">
+        <div style="display:flex;flex-direction:column;gap:4px;justify-content:center">
+          ${card(...m_r32_1, c16)}
+          <div style="height:4px"></div>
+          ${card(...m_r32_2, c16)}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-start;width:28px;flex-shrink:0">
+          <div style="flex:1;border-right:1.5px solid var(--bor);border-top:1.5px solid var(--bor);border-radius:0 4px 0 0;min-height:48%"></div>
+          <div style="width:28px;border-top:1.5px solid var(--bor)"></div>
+          <div style="flex:1;border-right:1.5px solid var(--bor);border-bottom:1.5px solid var(--bor);border-radius:0 0 4px 0;min-height:48%"></div>
+        </div>
+        <div style="align-self:center">${card(...m_r16, c8)}</div>
+      </div>
+    </div>`;
   }
 
-  // SF cards
-  for(let l=0;l<2;l++){
-    const m=BRACKET.SF[l];
-    const r=results[m.id];
-    const y=ysf(l);
-    let t1,t2,score;
-    if(r?.locked){
-      t1={n:r.homeTeam,f:getTeamFlag(r.homeTeam)};
-      t2={n:r.awayTeam,f:getTeamFlag(r.awayTeam)};
-      score=`${r.h}–${r.a}`;
-    } else {
-      t1=teamFromMatch(m.m1);
-      t2=teamFromMatch(m.m2);
-    }
-    svg+=card(XS[3],y,m.id,t1,t2,score,r?.live);
-    const srcY=cysf(l);
-    svg+=`<path d="M${XS[3]+CW},${srcY} H${XS[4]-4}" fill="none" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    if(l===0){
-      svg+=`<line x1="${XS[4]-4}" y1="${srcY}" x2="${XS[4]-4}" y2="${YF+CH/2}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    } else {
-      svg+=`<line x1="${XS[4]-4}" y1="${cysf(0)}" x2="${XS[4]-4}" y2="${srcY}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-      svg+=`<line x1="${XS[4]-4}" y1="${YF+CH/2}" x2="${XS[4]}" y2="${YF+CH/2}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
-    }
-  }
+  // FIFA bracket groupings (verified from Wikipedia):
+  // P89 = Gan P73 vs Gan P75
+  // P90 = Gan P74 vs Gan P77  → P97
+  // P91 = Gan P76 vs Gan P78
+  // P92 = Gan P79 vs Gan P80  → P98  → P101 → FINAL
+  // P93 = Gan P81 vs Gan P82
+  // P94 = Gan P83 vs Gan P84  → P99
+  // P95 = Gan P85 vs Gan P86
+  // P96 = Gan P87 vs Gan P88  → P100 → P102 → FINAL
 
-  // Final card
-  const rf=results[104];
-  let ft1,ft2,fscore;
-  if(rf?.locked){
-    ft1={n:rf.homeTeam,f:getTeamFlag(rf.homeTeam)};
-    ft2={n:rf.awayTeam,f:getTeamFlag(rf.awayTeam)};
-    fscore=`${rf.h}–${rf.a}`;
-  } else {
-    ft1=teamFromMatch(101);
-    ft2=teamFromMatch(102);
-  }
-  svg+=card(XS[4],YF,104,ft1,ft2,fscore,rf?.live);
-  // Trophy icon
-  svg+=`<text x="${XS[4]+CW/2}" y="${YF-6}" text-anchor="middle" font-size="14">🏆</text>`;
+  // R32 index map: P73=r32[0], P74=r32[1], P75=r32[2], P76=r32[3]
+  // P77=r32[4], P78=r32[5], P79=r32[6], P80=r32[7]
+  // P81=r32[8], P82=r32[9], P83=r32[10], P84=r32[11]
+  // P85=r32[12], P86=r32[13], P87=r32[14], P88=r32[15]
 
-  svg+=`</svg>`;
-  document.getElementById("ms-cruces").innerHTML=`<div style="overflow-x:auto;overflow-y:auto;max-height:85vh;padding-bottom:8px"><div style="min-width:${TW}px">${svg}</div></div>`;
+  const g1 = group("→ P97 → P101 → FINAL", r32[0], r32[2], r16[0], cqf);   // P73,P75→P89
+  const g2 = group("→ P97 → P101 → FINAL", r32[1], r32[4], r16[1], cqf);   // P74,P77→P90
+  const g3 = group("→ P98 → P101 → FINAL", r32[3], r32[5], r16[2], cqf);   // P76,P78→P91
+  const g4 = group("→ P98 → P101 → FINAL", r32[6], r32[7], r16[3], cqf);   // P79,P80→P92
+  const g5 = group("→ P99 → P102 → FINAL", r32[8], r32[9], r16[4], cqf);   // P81,P82→P93
+  const g6 = group("→ P99 → P102 → FINAL", r32[10],r32[11],r16[5], cqf);   // P83,P84→P94
+  const g7 = group("→ P100→ P102 → FINAL", r32[12],r32[13],r16[6], cqf);   // P85,P86→P95
+  const g8 = group("→ P100→ P102 → FINAL", r32[14],r32[15],r16[7], cqf);   // P87,P88→P96
+
+  const qfCards = qf.map(m=>`<div style="margin-bottom:10px">${card(...m,cqf)}</div>`).join("");
+  const sfCards = sf.map(m=>`<div style="margin-bottom:10px">${card(...m,csf)}</div>`).join("");
+  const finalCard = card(...B.f, cf);
+  const p3Card = card(...B.p3, "#64748b");
+
+  document.getElementById("ms-cruces").innerHTML = `
+  <div style="overflow-x:auto;padding-bottom:8px">
+  <div style="min-width:340px;max-width:600px">
+
+  <div style="display:flex;align-items:flex-start;gap:16px">
+    <!-- Left: R32 pairs → R16 -->
+    <div style="flex:1;min-width:0">
+      <div style="font-size:10px;font-weight:700;color:${c16};letter-spacing:.6px;margin-bottom:10px">🔵 16AVOS → OCTAVOS</div>
+      ${g1}${g2}${g3}${g4}${g5}${g6}${g7}${g8}
+    </div>
+    <!-- Right: QF, SF, Final -->
+    <div style="flex-shrink:0;width:200px">
+      <div style="font-size:10px;font-weight:700;color:${cqf};letter-spacing:.6px;margin-bottom:10px">🟡 CUARTOS</div>
+      ${qfCards}
+      <div style="font-size:10px;font-weight:700;color:${csf};letter-spacing:.6px;margin:16px 0 10px">🔴 SEMIS</div>
+      ${sfCards}
+      <div style="font-size:10px;font-weight:700;color:${cf};letter-spacing:.6px;margin:16px 0 10px">🏆 FINAL</div>
+      ${finalCard}
+      <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.6px;margin:16px 0 10px">🥉 3ER PUESTO</div>
+      ${p3Card}
+    </div>
+  </div>
+
+  </div>
+  </div>`;
 }
 
 
@@ -2265,7 +2247,7 @@ function buildScorers(){
   if(liveList && liveList.length){
     el.innerHTML=`<div class="card">
       <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores</div>
-      ${liveList.filter(s=>s.g>0).slice(0,7).map((s,i)=>`
+      ${liveList.filter(s=>s.g>0).slice(0,10).map((s,i)=>`
         <div class="scorer-row">
           <div class="scorer-rank${i<3?" top":""}">${i+1}</div>
           <div style="flex:1">
@@ -3155,17 +3137,9 @@ function normName(s){ return s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCa
 
 // Seed known scorers — always write manual list to Firebase as baseline
 async function seedScorers(){
-  // Use checkpoint if available (avoids showing 0 while API loads)
-  const snap = await get(ref(db,`pollas/${CUR.pollaId}/scorerCheckpoint`));
-  if(snap.exists() && snap.val().length){
-    const checkpoint = snap.val();
-    await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: checkpoint});
-    console.log("[Scorers] loaded from checkpoint:", checkpoint.length, "scorers");
-  } else {
-    // No checkpoint yet — use manual list as baseline
-    await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: [...MANUAL_SCORERS].sort((a,b)=>b.g-a.g)});
-    console.log("[Scorers] seeded from manual list:", MANUAL_SCORERS.length, "scorers");
-  }
+  // Always use manual list — reliable source of truth
+  await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: [...MANUAL_SCORERS].sort((a,b)=>b.g-a.g)});
+  console.log("[Scorers] seeded:", MANUAL_SCORERS.length, "scorers");
 }
 
 
