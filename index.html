@@ -1674,10 +1674,11 @@ function renderLive(){
     const oh=picks.map(o=>{
       const ptsBg=o.pts>0?"background:var(--gl);color:var(--gd)":"background:#f1f1f1;color:var(--t3)";
       const ptsCircle=`<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:800;${ptsBg};flex-shrink:0">+${o.pts}</span>`;
-      return`<div class="rrow" style="padding:8px 0;border-bottom:1px solid var(--bor)">
-        <span style="font-size:14px;font-weight:${o.me?"700":"500"};color:${o.me?"var(--bm)":"var(--t1)"};flex:1">${o.n}${o.me?" (tú)":""}</span>
+      const isRandRow = o.isRandom;
+      return`<div class="rrow" style="padding:8px 0;border-bottom:1px solid var(--bor);${isRandRow?"background:#fffdf0;":""}">
+        <span style="font-size:14px;font-weight:${o.me?"700":"500"};color:${o.me?"var(--bm)":"var(--t1)"};flex:1">${o.n}${o.me?" (tú)":""}${isRandRow?' <span style="font-size:10px;background:#fef3d0;color:#7a4400;border-radius:4px;padding:1px 5px">🎲 azar</span>':""}</span>
         <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:14px;font-weight:700;color:var(--t1)">${o.s}</span>
+          <span style="font-size:14px;font-weight:700;color:var(--t1);${isRandRow?"opacity:0.7":""}">${o.s}</span>
           <span style="width:1px;height:14px;background:var(--bor);display:inline-block"></span>
           <span style="font-size:13px;color:var(--t2)">${o.p}</span>
           ${ptsCircle}
@@ -1982,214 +1983,255 @@ function renderGroupTable(g){
   }).join("");
   document.getElementById("grp-table").innerHTML=`<div class="card"><table class="gtable"><tr><th>Selección</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>${rows}</table><div style="font-size:11px;color:var(--t2);background:var(--bg);border-radius:var(--rs);padding:9px 11px;margin-top:8px;border:1px solid var(--bor)"><span style="color:var(--gd);font-weight:700">Verde</span> clasifica · <span style="color:var(--am);font-weight:700">⭐ Top 8</span> entre mejores 8 terceros · <span style="color:var(--rd);font-weight:700">Fuera</span> eliminado</div></div>`;
 }
-// FIFA 2026 R32 bracket — fixed matchups (from regulations)
-// Format: [matchId, homeSlot, awaySlot, date, time, venue]
-const R32 = [
-  [73, "1E",  "3ABCDF", "2026-06-28", "16:00", "Los Ángeles"],
-  [74, "1I",  "3CDFGH", "2026-06-29", "14:00", "Houston"],
-  [75, "2A",  "2B",     "2026-06-29", "17:30", "Boston"],
-  [76, "1F",  "2C",     "2026-06-29", "22:00", "Monterrey"],
-  [77, "2K",  "2L",     "2026-06-30", "14:00", "Toronto"],
-  [78, "1H",  "2J",     "2026-06-30", "18:00", "Miami"],
-  [79, "1D",  "3BEFIJ", "2026-06-30", "22:00", "Cd. México"],
-  [80, "1G",  "3AEHIJ", "2026-07-01", "13:00", "Seattle"],
-  [81, "1C",  "2F",     "2026-07-01", "17:00", "Nueva York"],
-  [82, "2E",  "2I",     "2026-07-01", "21:00", "Dallas"],
-  [83, "1A",  "3CEFHI", "2026-07-02", "s/h",   "Atlanta"],
-  [84, "1L",  "3EHIJK", "2026-07-02", "s/h",   "Boston"],
-  [85, "1J",  "2H",     "2026-07-02", "s/h",   "Dallas"],
-  [86, "2D",  "2G",     "2026-07-03", "15:00", "Filadelfia"],
-  [87, "1B",  "3EFGIJ", "2026-07-03", "19:00", "Vancouver"],
-  [88, "1K",  "3DEIJL", "2026-07-03", "22:30", "Kansas City"],
-];
-const R16 = [
-  [89, 73, 75, "2026-07-05", "14:00", "Houston"],
-  [90, 74, 77, "2026-07-05", "18:00", "Filadelfia"],
-  [91, 76, 78, "2026-07-05", "17:00", "Nueva York"],
-  [92, 79, 80, "2026-07-05", "21:00", "Cd. México"],
-  [93, 81, 82, "2026-07-06", "16:00", "Seattle"],
-  [94, 83, 84, "2026-07-06", "21:00", "Dallas"],
-  [95, 85, 86, "2026-07-07", "17:00", "Vancouver"],
-  [96, 87, 88, "2026-07-07", "21:00", "Atlanta"],
-];
-const QF = [
-  [97, 89, 90, "2026-07-11", "13:00", "Atlanta"],
-  [98, 91, 92, "2026-07-11", "17:00", "Atlanta"],
-  [99, 93, 94, "2026-07-12", "17:00", "Seattle"],
-  [100,95, 96, "2026-07-12", "21:00", "Nueva York"],
-];
-const SF = [
-  [101, 97, 98,  "2026-07-15", "21:00", "Atlanta"],
-  [102, 99, 100, "2026-07-16", "21:00", "Dallas"],
-];
+// FIFA 2026 bracket — complete R32 structure
+const BRACKET = {
+  R32: [
+    {id:73,  h:"1° E",   a:"3° A/B/C/D/F"},
+    {id:74,  h:"1° I",   a:"3° C/D/F/G/H"},
+    {id:75,  h:"2° A",   a:"2° B"},
+    {id:76,  h:"1° F",   a:"2° C"},
+    {id:77,  h:"2° K",   a:"2° L"},
+    {id:78,  h:"1° H",   a:"2° J"},
+    {id:79,  h:"1° D",   a:"3° B/E/F/I/J"},
+    {id:80,  h:"1° G",   a:"3° A/E/H/I/J"},
+    {id:81,  h:"1° C",   a:"2° F"},
+    {id:82,  h:"2° E",   a:"2° I"},
+    {id:83,  h:"1° A",   a:"3° C/E/F/H/I"},
+    {id:84,  h:"1° L",   a:"3° E/H/I/J/K"},
+    {id:85,  h:"1° J",   a:"2° H"},
+    {id:86,  h:"2° D",   a:"2° G"},
+    {id:87,  h:"1° B",   a:"3° E/F/G/I/J"},
+    {id:88,  h:"1° K",   a:"3° D/E/I/J/L"},
+  ],
+  R16: [{id:89,m1:73,m2:75},{id:90,m1:74,m2:77},{id:91,m1:76,m2:78},{id:92,m1:79,m2:80},
+        {id:93,m1:81,m2:82},{id:94,m1:83,m2:84},{id:95,m1:85,m2:86},{id:96,m1:87,m2:88}],
+  QF:  [{id:97,m1:89,m2:90},{id:98,m1:91,m2:92},{id:99,m1:93,m2:94},{id:100,m1:95,m2:96}],
+  SF:  [{id:101,m1:97,m2:98},{id:102,m1:99,m2:100}],
+  F:   {id:104,m1:101,m2:102},
+  P3:  {id:103,m1:101,m2:102},
+};
 
-// Get real team for a bracket slot using current standings
-function slotToTeam(slot, standings, top8thirds){
-  const m = slot.match(/^([12])([A-L])$/);
-  if(m){
-    const pos = parseInt(m[1])-1;
-    const grp = m[2];
-    const st = standings[grp];
-    if(st && st[pos] && st[pos].pj > 0) return {name:st[pos].n, flag:st[pos].f, confirmed:st[pos].pj===3};
+const CW=160, CH=44, RG=44, ML=10, MT=28, RS=54;
+const XS=[ML, ML+CW+RG, ML+(CW+RG)*2, ML+(CW+RG)*3, ML+(CW+RG)*4];
+const TW=XS[4]+CW+ML, TH=16*RS+MT+10;
+
+function yr(i){ return MT+i*RS; }
+function cyr(i){ return yr(i)+CH/2; }
+function yr16(j){ return (cyr(j*2)+cyr(j*2+1))/2-CH/2; }
+function cyr16(j){ return yr16(j)+CH/2; }
+function yqf(k){ return (cyr16(k*2)+cyr16(k*2+1))/2-CH/2; }
+function cyqf(k){ return yqf(k)+CH/2; }
+function ysf(l){ return (cyqf(l*2)+cyqf(l*2+1))/2-CH/2; }
+function cysf(l){ return ysf(l)+CH/2; }
+const YF = (cysf(0)+cysf(1))/2-CH/2;
+
+function slotToTeamBracket(slot, standings, top8thirds){
+  const m1 = slot.match(/^([12])°\s([A-L])$/);
+  if(m1){
+    const pos=parseInt(m1[1])-1, grp=m1[2];
+    const st=standings[grp];
+    if(st&&st[pos]&&st[pos].pj>0) return {n:st[pos].n, f:st[pos].f, conf:st[pos].pj===3};
     return null;
   }
-  // Third place slot e.g. "3ABCDF"
-  const tm = slot.match(/^3([A-L]+)$/);
-  if(tm){
-    const groups = tm[1].split("");
-    const candidates = top8thirds.filter(t=>groups.includes(t.grp));
-    if(candidates.length > 0) return {name:candidates[0].n, flag:candidates[0].f, confirmed:false};
+  const m3=slot.match(/^3°\s([A-L/]+)$/);
+  if(m3){
+    const groups=m3[1].split("/");
+    const cands=top8thirds.filter(t=>groups.includes(t.grp));
+    if(cands.length>0) return {n:cands[0].n, f:cands[0].f, conf:false};
     return null;
   }
   return null;
 }
 
-function buildCruces(){
-  const standings = calcStandings();
-  const top8 = calcTop8(standings);
-  const results = pollaLive.results||{};
-
-  // Build top8thirds array sorted by qualification criteria
-  const thirds = Object.entries(standings).map(([grp, teams])=>{
-    const t = teams[2];
-    return t ? {...t, grp} : null;
-  }).filter(Boolean);
-  const top8thirds = thirds
-    .filter(t=>top8.has(t.n))
-    .sort((a,b)=>b.pts-a.pts||b.gf-b.gc-(a.gf-a.gc)||b.gf-a.gf);
-
-  // Helper to get team display for a match slot
-  function getTeamDisplay(slot){
-    const team = slotToTeam(slot, standings, top8thirds);
-    if(!team) return `<span style="color:var(--t3);font-size:13px">${slot}</span>`;
-    const conf = team.confirmed?"":"?";
-    return `<span style="font-size:14px">${team.flag}</span><span style="font-size:13px;font-weight:${team.confirmed?700:400}">${team.name}${conf}</span>`;
-  }
-
-  // Helper to get winner display for knockout matches
-  function getKnockoutTeam(matchId, side){
-    const r = results[matchId];
-    if(!r?.locked) return `<span style="color:var(--t3);font-size:13px">Gan. P${matchId}</span>`;
-    const winner = side==="h" ? r.homeTeam : r.awayTeam;
-    const flag = getTeamFlag(winner);
-    return `<span style="font-size:14px">${flag}</span><span style="font-size:13px;font-weight:700">${winner}</span>`;
-  }
-  function getLoserTeam(matchId){
-    const r = results[matchId];
-    if(!r?.locked) return `<span style="color:var(--t3);font-size:13px">Per. P${matchId}</span>`;
-    const loser = r.h > r.a ? r.awayTeam : r.homeTeam;
-    const flag = getTeamFlag(loser);
-    return `<span style="font-size:14px">${flag}</span><span style="font-size:13px;font-weight:700">${loser}</span>`;
-  }
-
-  function matchCard(mid, homeDisplay, awayDisplay, date, time, venue){
-    const r = results[mid];
-    const score = r?.locked ? `<span style="font-size:15px;font-weight:800;color:var(--bm);margin:0 4px">${r.h}–${r.a}</span>` : "";
-    const localT = time && time!=="s/h" ? toLocal(date, time).time : "s/h";
-    const dateStr = new Date(date+"T12:00:00").toLocaleDateString("es", {weekday:"short",day:"numeric",month:"short"});
-    const isLive = r?.live;
-    return `<div class="bm-item" style="${isLive?"border-left:3px solid var(--rd)":""}">
-      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px">${homeDisplay}${score}</div>
-        <div style="display:flex;align-items:center;gap:6px">${awayDisplay}</div>
-      </div>
-      <div class="bm-right">
-        <div class="bm-date">${dateStr}${localT!=="s/h"?" · "+localT:""}</div>
-        <div class="bm-sede">${venue}</div>
-        ${isLive?`<div style="font-size:10px;color:var(--rd);font-weight:700">🔴 EN VIVO</div>`:""}
-      </div>
-    </div>`;
-  }
-
-  let html = "";
-
-  // R32
-  html += `<div class="sdiv"><span>🔵 16avos de Final</span></div><div class="card">`;
-  for(const [mid, hSlot, aSlot, date, time, venue] of R32){
-    const r = results[mid];
-    let homeD, awayD;
-    if(r?.locked){
-      homeD = `<span style="font-size:14px">${getTeamFlag(r.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r.homeTeam}</span>`;
-      awayD = `<span style="font-size:14px">${getTeamFlag(r.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r.awayTeam}</span>`;
-    } else {
-      homeD = getTeamDisplay(hSlot);
-      awayD = getTeamDisplay(aSlot);
-    }
-    html += matchCard(mid, homeD, awayD, date, time, venue);
-  }
-  html += `</div>`;
-
-  // R16
-  html += `<div class="sdiv"><span>🟢 Octavos de Final</span></div><div class="card">`;
-  for(const [mid, m1, m2, date, time, venue] of R16){
-    const r = results[mid];
-    const r1 = results[m1], r2 = results[m2];
-    let homeD, awayD;
-    if(r?.locked){
-      homeD = `<span style="font-size:14px">${getTeamFlag(r.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r.homeTeam}</span>`;
-      awayD = `<span style="font-size:14px">${getTeamFlag(r.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r.awayTeam}</span>`;
-    } else {
-      homeD = r1?.locked ? getKnockoutTeam(m1, r1.h>=r1.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m1}</span>`;
-      awayD = r2?.locked ? getKnockoutTeam(m2, r2.h>=r2.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m2}</span>`;
-    }
-    html += matchCard(mid, homeD, awayD, date, time, venue);
-  }
-  html += `</div>`;
-
-  // QF
-  html += `<div class="sdiv"><span>🟡 Cuartos de Final</span></div><div class="card">`;
-  for(const [mid, m1, m2, date, time, venue] of QF){
-    const r = results[mid];
-    const r1 = results[m1], r2 = results[m2];
-    let homeD, awayD;
-    if(r?.locked){
-      homeD = `<span style="font-size:14px">${getTeamFlag(r.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r.homeTeam}</span>`;
-      awayD = `<span style="font-size:14px">${getTeamFlag(r.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r.awayTeam}</span>`;
-    } else {
-      homeD = r1?.locked ? getKnockoutTeam(m1, r1.h>=r1.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m1}</span>`;
-      awayD = r2?.locked ? getKnockoutTeam(m2, r2.h>=r2.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m2}</span>`;
-    }
-    html += matchCard(mid, homeD, awayD, date, time, venue);
-  }
-  html += `</div>`;
-
-  // SF
-  html += `<div class="sdiv"><span>🔴 Semifinales</span></div><div class="card">`;
-  for(const [mid, m1, m2, date, time, venue] of SF){
-    const r = results[mid];
-    const r1 = results[m1], r2 = results[m2];
-    let homeD, awayD;
-    if(r?.locked){
-      homeD = `<span style="font-size:14px">${getTeamFlag(r.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r.homeTeam}</span>`;
-      awayD = `<span style="font-size:14px">${getTeamFlag(r.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r.awayTeam}</span>`;
-    } else {
-      homeD = r1?.locked ? getKnockoutTeam(m1, r1.h>=r1.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m1}</span>`;
-      awayD = r2?.locked ? getKnockoutTeam(m2, r2.h>=r2.a?"h":"a") : `<span style="color:var(--t3);font-size:13px">Gan. P${m2}</span>`;
-    }
-    html += matchCard(mid, homeD, awayD, date, time, venue);
-  }
-  html += `</div>`;
-
-  // 3rd place
-  html += `<div class="sdiv"><span>🥉 3er Puesto</span></div><div class="card">`;
-  const r103 = results[103];
-  html += matchCard(103,
-    r103?.locked ? `<span style="font-size:14px">${getTeamFlag(r103.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r103.homeTeam}</span>` : getLoserTeam(101),
-    r103?.locked ? `<span style="font-size:14px">${getTeamFlag(r103.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r103.awayTeam}</span>` : getLoserTeam(102),
-    "2026-07-18", "17:00", "Miami");
-  html += `</div>`;
-
-  // Final
-  html += `<div class="sdiv"><span>🏆 Gran Final</span></div><div class="card">`;
-  const r104 = results[104];
-  html += matchCard(104,
-    r104?.locked ? `<span style="font-size:14px">${getTeamFlag(r104.homeTeam)}</span><span style="font-size:13px;font-weight:700">${r104.homeTeam}</span>` : getKnockoutTeam(101, results[101]?.h>=results[101]?.a?"h":"a"),
-    r104?.locked ? `<span style="font-size:14px">${getTeamFlag(r104.awayTeam)}</span><span style="font-size:13px;font-weight:700">${r104.awayTeam}</span>` : getKnockoutTeam(102, results[102]?.h>=results[102]?.a?"h":"a"),
-    "2026-07-19", "21:00", "Nueva York / Nueva Jersey");
-  html += `</div>`;
-
-  document.getElementById("ms-cruces").innerHTML = html;
+function matchWinner(r){
+  if(!r?.locked) return null;
+  if(r.h>r.a) return {n:r.homeTeam, f:getTeamFlag(r.homeTeam)};
+  if(r.a>r.h) return {n:r.awayTeam, f:getTeamFlag(r.awayTeam)};
+  return {n:r.homeTeam, f:getTeamFlag(r.homeTeam)};
 }
+function matchLoser(r){
+  if(!r?.locked) return null;
+  if(r.h<r.a) return {n:r.homeTeam, f:getTeamFlag(r.homeTeam)};
+  return {n:r.awayTeam, f:getTeamFlag(r.awayTeam)};
+}
+
+function teamLabel(team, fallback, conf){
+  if(!team) return `<tspan style="fill:var(--color-text-tertiary);font-size:10px">${fallback}</tspan>`;
+  const q = conf===false ? "" : "";
+  return `<tspan style="fill:var(--color-text-primary);font-size:11px">${team.f} ${team.n}</tspan>`;
+}
+
+function buildCruces(){
+  const standings=calcStandings();
+  const top8=calcTop8(standings);
+  const results=pollaLive.results||{};
+  const thirds=Object.entries(standings).map(([g,ts])=>ts[2]?{...ts[2],grp:g}:null).filter(Boolean);
+  const top8thirds=thirds.filter(t=>top8.has(t.n)).sort((a,b)=>b.pts-a.pts||(b.gf-b.gc)-(a.gf-a.gc));
+
+  function teamFromSlot(slot){ return slotToTeamBracket(slot, standings, top8thirds); }
+  function teamFromMatch(mid){ return matchWinner(results[mid]); }
+  function loserFromMatch(mid){ return matchLoser(results[mid]); }
+
+  // SVG card helper
+  function card(x,y,mid,t1,t2,score,isLive){
+    const stroke=isLive?"#e63946":"var(--color-border-tertiary)";
+    const sw=isLive?1.5:0.5;
+    const t1disp = t1 ? `${t1.f} ${t1.n}` : "?";
+    const t2disp = t2 ? `${t2.f} ${t2.n}` : "?";
+    const t1col = t1 ? "var(--color-text-primary)" : "var(--color-text-tertiary)";
+    const t2col = t2 ? "var(--color-text-primary)" : "var(--color-text-tertiary)";
+    const scoreDisp = score ? ` ${score}` : "";
+    return `<rect x="${x}" y="${y}" width="${CW}" height="${CH}" rx="5" fill="var(--color-background-primary)" stroke="${stroke}" stroke-width="${sw}"/>
+<text x="${x+6}" y="${y+16}" font-size="9" fill="var(--color-text-tertiary)" font-family="var(--font-sans)">P${mid}</text>
+<text x="${x+6}" y="${y+28}" font-size="11" fill="${t1col}" font-family="var(--font-sans)">${t1disp}${score?" "+score.split("–")[0]||"":""}</text>
+<text x="${x+6}" y="${y+41}" font-size="11" fill="${t2col}" font-family="var(--font-sans)">${t2disp}${score?" "+score.split("–")[1]||"":""}</text>`;
+  }
+
+  // Connector line helper: right edge of source card to left edge of dest card
+  function conn(sx,sy,dx,dy){
+    const mx=(sx+dx)/2;
+    return `<path d="M${sx},${sy} H${mx} V${dy} H${dx}" fill="none" stroke="var(--color-border-secondary)" stroke-width="1"/>`;
+  }
+
+  let svg = `<svg width="${TW}" height="${TH}" viewBox="0 0 ${TW} ${TH}" xmlns="http://www.w3.org/2000/svg" style="display:block">
+<style>text{font-family:var(--font-sans)}</style>`;
+
+  // Headers
+  const hdrs = [["16AVOS",0],["OCTAVOS",1],["CUARTOS",2],["SEMIS",3],["FINAL",4]];
+  for(const [lbl,ri] of hdrs){
+    svg += `<text x="${XS[ri]+CW/2}" y="18" text-anchor="middle" font-size="9" font-weight="500" fill="var(--color-text-secondary)" letter-spacing=".8">${lbl}</text>`;
+  }
+
+  // R32 cards + connectors to R16
+  for(let i=0;i<16;i++){
+    const m=BRACKET.R32[i];
+    const r=results[m.id];
+    const y=yr(i);
+    let t1,t2,score;
+    if(r?.locked){
+      t1={n:r.homeTeam,f:getTeamFlag(r.homeTeam)};
+      t2={n:r.awayTeam,f:getTeamFlag(r.awayTeam)};
+      score=`${r.h}–${r.a}`;
+    } else {
+      t1=teamFromSlot(m.h);
+      t2=teamFromSlot(m.a);
+    }
+    svg+=card(XS[0],y,m.id,t1,t2,score,r?.live);
+
+    // Connector to R16
+    const j=Math.floor(i/2);
+    const cy16=cyr16(j);
+    const srcY=cyr(i);
+    svg+=`<path d="M${XS[0]+CW},${srcY} H${XS[1]-4}" fill="none" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    // Vertical bar
+    if(i%2===0){
+      svg+=`<line x1="${XS[1]-4}" y1="${srcY}" x2="${XS[1]-4}" y2="${cy16}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    } else {
+      svg+=`<line x1="${XS[1]-4}" y1="${cyr(i-1)}" x2="${XS[1]-4}" y2="${srcY}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+      svg+=`<line x1="${XS[1]-4}" y1="${cy16}" x2="${XS[1]}" y2="${cy16}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    }
+  }
+
+  // R16 cards
+  for(let j=0;j<8;j++){
+    const m=BRACKET.R16[j];
+    const r=results[m.id];
+    const y=yr16(j);
+    let t1,t2,score;
+    if(r?.locked){
+      t1={n:r.homeTeam,f:getTeamFlag(r.homeTeam)};
+      t2={n:r.awayTeam,f:getTeamFlag(r.awayTeam)};
+      score=`${r.h}–${r.a}`;
+    } else {
+      t1=teamFromMatch(m.m1);
+      t2=teamFromMatch(m.m2);
+    }
+    svg+=card(XS[1],y,m.id,t1,t2,score,r?.live);
+    // Connector to QF
+    const k=Math.floor(j/2);
+    const cyq=cyqf(k);
+    const srcY=cyr16(j);
+    svg+=`<path d="M${XS[1]+CW},${srcY} H${XS[2]-4}" fill="none" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    if(j%2===0){
+      svg+=`<line x1="${XS[2]-4}" y1="${srcY}" x2="${XS[2]-4}" y2="${cyq}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    } else {
+      svg+=`<line x1="${XS[2]-4}" y1="${cyr16(j-1)}" x2="${XS[2]-4}" y2="${srcY}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+      svg+=`<line x1="${XS[2]-4}" y1="${cyq}" x2="${XS[2]}" y2="${cyq}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    }
+  }
+
+  // QF cards
+  for(let k=0;k<4;k++){
+    const m=BRACKET.QF[k];
+    const r=results[m.id];
+    const y=yqf(k);
+    let t1,t2,score;
+    if(r?.locked){
+      t1={n:r.homeTeam,f:getTeamFlag(r.homeTeam)};
+      t2={n:r.awayTeam,f:getTeamFlag(r.awayTeam)};
+      score=`${r.h}–${r.a}`;
+    } else {
+      t1=teamFromMatch(m.m1);
+      t2=teamFromMatch(m.m2);
+    }
+    svg+=card(XS[2],y,m.id,t1,t2,score,r?.live);
+    const l=Math.floor(k/2);
+    const cys=cysf(l);
+    const srcY=cyqf(k);
+    svg+=`<path d="M${XS[2]+CW},${srcY} H${XS[3]-4}" fill="none" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    if(k%2===0){
+      svg+=`<line x1="${XS[3]-4}" y1="${srcY}" x2="${XS[3]-4}" y2="${cys}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    } else {
+      svg+=`<line x1="${XS[3]-4}" y1="${cyqf(k-1)}" x2="${XS[3]-4}" y2="${srcY}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+      svg+=`<line x1="${XS[3]-4}" y1="${cys}" x2="${XS[3]}" y2="${cys}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    }
+  }
+
+  // SF cards
+  for(let l=0;l<2;l++){
+    const m=BRACKET.SF[l];
+    const r=results[m.id];
+    const y=ysf(l);
+    let t1,t2,score;
+    if(r?.locked){
+      t1={n:r.homeTeam,f:getTeamFlag(r.homeTeam)};
+      t2={n:r.awayTeam,f:getTeamFlag(r.awayTeam)};
+      score=`${r.h}–${r.a}`;
+    } else {
+      t1=teamFromMatch(m.m1);
+      t2=teamFromMatch(m.m2);
+    }
+    svg+=card(XS[3],y,m.id,t1,t2,score,r?.live);
+    const srcY=cysf(l);
+    svg+=`<path d="M${XS[3]+CW},${srcY} H${XS[4]-4}" fill="none" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    if(l===0){
+      svg+=`<line x1="${XS[4]-4}" y1="${srcY}" x2="${XS[4]-4}" y2="${YF+CH/2}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    } else {
+      svg+=`<line x1="${XS[4]-4}" y1="${cysf(0)}" x2="${XS[4]-4}" y2="${srcY}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+      svg+=`<line x1="${XS[4]-4}" y1="${YF+CH/2}" x2="${XS[4]}" y2="${YF+CH/2}" stroke="var(--color-border-tertiary)" stroke-width="0.8"/>`;
+    }
+  }
+
+  // Final card
+  const rf=results[104];
+  let ft1,ft2,fscore;
+  if(rf?.locked){
+    ft1={n:rf.homeTeam,f:getTeamFlag(rf.homeTeam)};
+    ft2={n:rf.awayTeam,f:getTeamFlag(rf.awayTeam)};
+    fscore=`${rf.h}–${rf.a}`;
+  } else {
+    ft1=teamFromMatch(101);
+    ft2=teamFromMatch(102);
+  }
+  svg+=card(XS[4],YF,104,ft1,ft2,fscore,rf?.live);
+  // Trophy icon
+  svg+=`<text x="${XS[4]+CW/2}" y="${YF-6}" text-anchor="middle" font-size="14">🏆</text>`;
+
+  svg+=`</svg>`;
+  document.getElementById("ms-cruces").innerHTML=`<div style="overflow-x:auto;overflow-y:auto;max-height:85vh;padding-bottom:8px"><div style="min-width:${TW}px">${svg}</div></div>`;
+}
+
+
 const TEAM_FLAGS = {
   "Mexico":"🇲🇽","United States":"🇺🇸","Canada":"🇨🇦","Argentina":"🇦🇷","Brazil":"🇧🇷",
   "France":"🇫🇷","Germany":"🇩🇪","Spain":"🇪🇸","Portugal":"🇵🇹","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿",
