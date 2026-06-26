@@ -2009,349 +2009,350 @@ function renderGroupTable(g){
   document.getElementById("grp-table").innerHTML=`<div class="card"><table class="gtable"><tr><th>Selección</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>${rows}</table><div style="font-size:11px;color:var(--t2);background:var(--bg);border-radius:var(--rs);padding:9px 11px;margin-top:8px;border:1px solid var(--bor)"><span style="color:var(--gd);font-weight:700">Verde</span> clasifica · <span style="color:var(--am);font-weight:700">⭐ Top 8</span> entre mejores 8 terceros · <span style="color:var(--rd);font-weight:700">Fuera</span> eliminado</div></div>`;
 }
 function buildCruces(){
-  const results = pollaLive.results||{};
-  const standings = calcStandings();
-  const top8 = calcTop8(standings);
+  const results=pollaLive.results||{};
+  const standings=calcStandings();
+  const top8=calcTop8(standings);
 
-  // ── Resolve team slot from group standings ──
+  /* ── Resolve slot → {name, flag} ── */
   function resolveSlot(slot){
-    const m1 = slot.match(/^([12])°\s*([A-L])$/);
+    const m1=slot.match(/^([12])°\s*([A-L])$/);
     if(m1){
-      const pos=parseInt(m1[1])-1, grp=m1[2];
-      const st=standings[grp]; if(!st) return {name:slot,flag:"🏳️"};
+      const pos=parseInt(m1[1])-1, grp=m1[2], st=standings[grp]; if(!st) return {name:slot,flag:"🏳️"};
       const gMs=MATCHES.filter(m=>m.ph==="Grupos"&&m.gr===grp);
-      const played=gMs.filter(m=>results[m.id]?.locked).length;
-      if(played===gMs.length && st[pos]?.pj>0) return {name:st[pos].n,flag:st[pos].f};
+      if(gMs.filter(m=>results[m.id]?.locked).length===gMs.length&&st[pos]?.pj>0)
+        return {name:st[pos].n, flag:st[pos].f};
       return {name:slot,flag:"🏳️"};
     }
     const m3=slot.match(/^3°\s*([A-L]+)$/);
     if(m3){
-      const eligible=m3[1].split("");
-      const top8groups=Object.entries(standings)
-        .filter(([g,t])=>top8.has(t[2]?.n)&&t[2]?.pj>0)
-        .map(([g])=>g).sort();
-      if(top8groups.length===8){
-        const assigned=getFIFAThird(top8groups);
-        if(assigned[slot]){
-          const g=assigned[slot], t=standings[g]?.[2];
-          if(t?.pj>0) return {name:t.n,flag:t.f};
-        }
-      }
+      const g8=Object.entries(standings).filter(([g,t])=>top8.has(t[2]?.n)&&t[2]?.pj>0).map(([g])=>g).sort();
+      if(g8.length===8){const a=getFIFAThird(g8); if(a[slot]){const t=standings[a[slot]]?.[2]; if(t?.pj>0) return {name:t.n,flag:t.f};}}
       return {name:slot,flag:"🏳️"};
     }
     return {name:slot,flag:"🏳️"};
   }
 
-  // ── FIFA Annex C — third-place assignment table ──
-  // Key = 8 sorted group letters; value = [P79a,P85a,P81a,P74a,P82a,P77a,P87a,P80a]
+  /* ── FIFA Annex C ── */
   function getFIFAThird(g8){
     const key=g8.join("");
     const T={
-      "EFGHIJKL":["E","J","I","F","H","G","L","K"],
-      "DFGHIJKL":["H","G","I","D","J","F","L","K"],
-      "DEGHIJKL":["E","J","I","D","H","G","L","K"],
-      "DEFHIJKL":["E","J","I","D","H","F","L","K"],
-      "DEFGIJKL":["E","G","I","D","J","F","L","K"],
-      "DEFGHJKL":["E","G","J","D","H","F","L","K"],
-      "DEFGHIKL":["E","G","I","D","H","F","L","K"],
-      "DEFGHIJL":["E","G","J","D","H","F","L","I"],
-      "DEFGHIJK":["E","G","J","D","H","F","I","K"],
-      "CFGHIJKL":["H","G","I","C","J","F","L","K"],
-      "CEGHIJKL":["E","J","I","C","H","G","L","K"],
-      "CEFHIJKL":["E","J","I","C","H","F","L","K"],
-      "CEFGIJKL":["E","G","I","C","J","F","L","K"],
-      "CEFGHJKL":["E","G","J","C","H","F","L","K"],
-      "CEFGHIKL":["E","G","I","C","H","F","L","K"],
-      "CEFGHIJL":["E","G","J","C","H","F","L","I"],
-      "CEFGHIJK":["E","G","J","C","H","F","I","K"],
-      "CDGHIJKL":["H","G","I","C","J","D","L","K"],
-      "CDFHIJKL":["C","J","I","D","H","F","L","K"],
-      "CDFGIJKL":["C","G","I","D","J","F","L","K"],
-      "CDFGHJKL":["C","G","J","D","H","F","L","K"],
-      "CDFGHIKL":["C","G","I","D","H","F","L","K"],
-      "CDFGHIJL":["C","G","J","D","H","F","L","I"],
-      "CDFGHIJK":["C","G","J","D","H","F","I","K"],
-      "CDEHIJKL":["E","J","I","C","H","D","L","K"],
-      "CDEGHIJL":["E","G","J","C","H","D","L","I"],
-      "CDEGHIJK":["E","G","J","C","H","D","I","K"],
-      "CDEGHIKL":["E","G","I","C","H","D","L","K"],
-      "CDEFIJKL":["C","J","E","D","I","F","L","K"],
-      "CDEFHJKL":["C","J","E","D","H","F","L","K"],
-      "CDEFHIKL":["C","E","I","D","H","F","L","K"],
-      "CDEFHIJL":["C","J","E","D","H","F","L","I"],
-      "CDEFHIJK":["C","J","E","D","H","F","I","K"],
-      "CDEFGJKL":["C","G","E","D","J","F","L","K"],
-      "CDEFGIKL":["C","G","E","D","I","F","L","K"],
-      "CDEFGIJL":["C","G","E","D","J","F","L","I"],
-      "CDEFGIJK":["C","G","E","D","J","F","I","K"],
-      "CDEFGHKL":["C","G","E","D","H","F","L","K"],
-      "CDEFGHJL":["C","G","J","D","H","F","L","E"],
-      "CDEFGHJK":["C","G","J","D","H","F","E","K"],
-      "CDEFGHIL":["C","G","E","D","H","F","L","I"],
-      "CDEFGHIK":["C","G","E","D","H","F","I","K"],
-      "CDEFGHIJ":["C","G","J","D","H","F","E","I"],
-      "BFGHIJKL":["H","J","B","F","I","G","L","K"],
-      "BEGHIJKL":["E","J","I","B","H","G","L","K"],
-      "BEFHIJKL":["E","J","B","F","I","H","L","K"],
-      "BEFGIJKL":["E","J","B","F","I","G","L","K"],
-      "BEFGHJKL":["E","J","B","F","H","G","L","K"],
-      "BEFGHIKL":["E","G","B","F","I","H","L","K"],
-      "BEFGHIJL":["E","J","B","F","H","G","L","I"],
-      "BEFGHIJK":["E","J","B","F","H","G","I","K"],
-      "BDGHIJKL":["H","J","B","D","I","G","L","K"],
-      "BDFHIJKL":["H","J","B","D","I","F","L","K"],
-      "BDFGIJKL":["I","G","B","D","J","F","L","K"],
-      "BDFGHJKL":["H","G","B","D","J","F","L","K"],
-      "BDFGHIKL":["H","G","B","D","I","F","L","K"],
-      "BDFGHIJL":["H","G","B","D","J","F","L","I"],
-      "BDFGHIJK":["H","G","B","D","J","F","I","K"],
-      "BDEHIJKL":["E","J","B","D","I","H","L","K"],
-      "BDEGHIKL":["E","G","B","D","I","H","L","K"],
-      "BDEGHIJL":["E","J","B","D","H","G","L","I"],
-      "BDEGHIJK":["E","J","B","D","H","G","I","K"],
-      "BDEFIJKL":["E","J","B","D","I","F","L","K"],
-      "BDEFHJKL":["E","J","B","D","H","F","L","K"],
-      "BDEFHIKL":["E","I","B","D","H","F","L","K"],
-      "BDEFHIJL":["E","J","B","D","H","F","L","I"],
-      "BDEFHIJK":["E","J","B","D","H","F","I","K"],
-      "BDEFGJKL":["E","G","B","D","J","F","L","K"],
-      "BDEFGIKL":["E","G","B","D","I","F","L","K"],
-      "BDEFGIJL":["E","G","B","D","J","F","L","I"],
-      "BDEFGIJK":["E","G","B","D","J","F","I","K"],
-      "BDEFGHKL":["E","G","B","D","H","F","L","K"],
+      "EFGHIJKL":["E","J","I","F","H","G","L","K"],"DFGHIJKL":["H","G","I","D","J","F","L","K"],
+      "DEGHIJKL":["E","J","I","D","H","G","L","K"],"DEFHIJKL":["E","J","I","D","H","F","L","K"],
+      "DEFGIJKL":["E","G","I","D","J","F","L","K"],"DEFGHJKL":["E","G","J","D","H","F","L","K"],
+      "DEFGHIKL":["E","G","I","D","H","F","L","K"],"DEFGHIJL":["E","G","J","D","H","F","L","I"],
+      "DEFGHIJK":["E","G","J","D","H","F","I","K"],"CFGHIJKL":["H","G","I","C","J","F","L","K"],
+      "CEGHIJKL":["E","J","I","C","H","G","L","K"],"CEFHIJKL":["E","J","I","C","H","F","L","K"],
+      "CEFGIJKL":["E","G","I","C","J","F","L","K"],"CEFGHJKL":["E","G","J","C","H","F","L","K"],
+      "CEFGHIKL":["E","G","I","C","H","F","L","K"],"CEFGHIJL":["E","G","J","C","H","F","L","I"],
+      "CEFGHIJK":["E","G","J","C","H","F","I","K"],"CDGHIJKL":["H","G","I","C","J","D","L","K"],
+      "CDFHIJKL":["C","J","I","D","H","F","L","K"],"CDFGIJKL":["C","G","I","D","J","F","L","K"],
+      "CDFGHJKL":["C","G","J","D","H","F","L","K"],"CDFGHIKL":["C","G","I","D","H","F","L","K"],
+      "CDFGHIJL":["C","G","J","D","H","F","L","I"],"CDFGHIJK":["C","G","J","D","H","F","I","K"],
+      "CDEHIJKL":["E","J","I","C","H","D","L","K"],"CDEGHIJL":["E","G","J","C","H","D","L","I"],
+      "CDEGHIJK":["E","G","J","C","H","D","I","K"],"CDEGHIKL":["E","G","I","C","H","D","L","K"],
+      "CDEFIJKL":["C","J","E","D","I","F","L","K"],"CDEFHJKL":["C","J","E","D","H","F","L","K"],
+      "CDEFHIKL":["C","E","I","D","H","F","L","K"],"CDEFHIJL":["C","J","E","D","H","F","L","I"],
+      "CDEFHIJK":["C","J","E","D","H","F","I","K"],"CDEFGJKL":["C","G","E","D","J","F","L","K"],
+      "CDEFGIKL":["C","G","E","D","I","F","L","K"],"CDEFGIJL":["C","G","E","D","J","F","L","I"],
+      "CDEFGIJK":["C","G","E","D","J","F","I","K"],"CDEFGHKL":["C","G","E","D","H","F","L","K"],
+      "CDEFGHJL":["C","G","J","D","H","F","L","E"],"CDEFGHJK":["C","G","J","D","H","F","E","K"],
+      "CDEFGHIL":["C","G","E","D","H","F","L","I"],"CDEFGHIK":["C","G","E","D","H","F","I","K"],
+      "CDEFGHIJ":["C","G","J","D","H","F","E","I"],"BFGHIJKL":["H","J","B","F","I","G","L","K"],
+      "BEGHIJKL":["E","J","I","B","H","G","L","K"],"BEFHIJKL":["E","J","B","F","I","H","L","K"],
+      "BEFGIJKL":["E","J","B","F","I","G","L","K"],"BEFGHJKL":["E","J","B","F","H","G","L","K"],
+      "BEFGHIKL":["E","G","B","F","I","H","L","K"],"BEFGHIJL":["E","J","B","F","H","G","L","I"],
+      "BEFGHIJK":["E","J","B","F","H","G","I","K"],"BDGHIJKL":["H","J","B","D","I","G","L","K"],
+      "BDFHIJKL":["H","J","B","D","I","F","L","K"],"BDFGIJKL":["I","G","B","D","J","F","L","K"],
+      "BDFGHJKL":["H","G","B","D","J","F","L","K"],"BDFGHIKL":["H","G","B","D","I","F","L","K"],
+      "BDFGHIJL":["H","G","B","D","J","F","L","I"],"BDFGHIJK":["H","G","B","D","J","F","I","K"],
+      "BDEHIJKL":["E","J","B","D","I","H","L","K"],"BDEGHIKL":["E","G","B","D","I","H","L","K"],
+      "BDEGHIJL":["E","J","B","D","H","G","L","I"],"BDEGHIJK":["E","J","B","D","H","G","I","K"],
+      "BDEFIJKL":["E","J","B","D","I","F","L","K"],"BDEFHJKL":["E","J","B","D","H","F","L","K"],
+      "BDEFHIKL":["E","I","B","D","H","F","L","K"],"BDEFHIJL":["E","J","B","D","H","F","L","I"],
+      "BDEFHIJK":["E","J","B","D","H","F","I","K"],"BDEFGJKL":["E","G","B","D","J","F","L","K"],
+      "BDEFGIKL":["E","G","B","D","I","F","L","K"],"BDEFGIJL":["E","G","B","D","J","F","L","I"],
+      "BDEFGIJK":["E","G","B","D","J","F","I","K"],"BDEFGHKL":["E","G","B","D","H","F","L","K"],
     };
     const v=T[key]; if(!v) return {};
-    // Slots: P79a,P85a,P81a,P74a,P82a,P77a,P87a,P80a
     return {"3°CEFHI":v[0],"3°EFGIJ":v[1],"3°BEFIJ":v[2],"3°ABCDF":v[3],
             "3°AEHIJ":v[4],"3°CDFGH":v[5],"3°DEIJL":v[6],"3°EHIJK":v[7]};
   }
 
-  // ── Resolve display name for a match participant ──
-  function slotInfo(matchId, side){
-    const m=MATCHES.find(x=>x.id===matchId); if(!m) return {name:"?",flag:"🏳️"};
-    const r=results[matchId];
-    if(r){
-      const rn=side==="home"?r.homeTeam:r.awayTeam;
-      if(rn&&!rn.includes("TBD")&&!rn.match(/^[12°]/)&&!rn.match(/^3°/)&&!rn.includes("Gan.")&&!rn.includes("Per."))
-        return {name:rn,flag:getTeamFlag(rn)||"🏳️"};
-    }
+  /* ── slotInfo for any match participant ── */
+  function slotInfo(mid,side){
+    const m=MATCHES.find(x=>x.id===mid); if(!m) return {name:"?",flag:"🏳️"};
+    const r=results[mid];
+    if(r){const rn=side==="home"?r.homeTeam:r.awayTeam;
+      if(rn&&!rn.includes("TBD")&&!rn.match(/^[12]°/)&&!rn.match(/^3°/)&&!rn.includes("Gan.")&&!rn.includes("Per."))
+        return {name:rn,flag:getTeamFlag(rn)||"🏳️"};}
     const raw=side==="home"?m.home:m.away;
     if(m.ph==="16avos") return resolveSlot(raw);
     return {name:raw,flag:"🏳️"};
   }
 
-  // ── Bracket card ──
+  /* ── Single bracket card ── */
+  const CH=62, CG=6;
   function bCard(mid,color){
-    const m=MATCHES.find(x=>x.id===mid); if(!m) return "<div style='height:64px'></div>";
+    const m=MATCHES.find(x=>x.id===mid); if(!m) return `<div style="height:${CH}px;width:130px"></div>`;
     const h=slotInfo(mid,"home"), a=slotInfo(mid,"away");
-    const r=results[mid], isLocked=!!r?.locked, isLive=!!r?.live;
-    const localT=m.aTime&&m.aTime!=="s/h"?toLocal(m.aDate,m.aTime).time:"";
-    const localD=m.aDate?toLocal(m.aDate,m.aTime||"00:00").date:"";
-    const bdr=isLive?`var(--gm)`:isLocked?`var(--bor)`:color;
+    const r=results[mid], lk=!!r?.locked, lv=!!r?.live;
+    const lt=m.aTime&&m.aTime!=="s/h"?toLocal(m.aDate,m.aTime).time:"";
+    const ld=m.aDate?toLocal(m.aDate,m.aTime||"00:00").date:"";
     const sh=r?.h??null, sa=r?.a??null;
-    const sw=isLocked&&sh!==null&&sh>sa, aw=isLocked&&sa!==null&&sa>sh;
-    return `<div style="background:var(--card);border:1.5px solid ${bdr};border-radius:9px;padding:7px 9px;width:138px;flex-shrink:0;box-shadow:var(--sh)">
-      <div style="font-size:8px;font-weight:700;color:${color};display:flex;justify-content:space-between;margin-bottom:5px">
-        <span>P${mid}</span><span style="color:var(--t3);font-weight:500">${isLive?'🔴':isLocked?localT:localD}</span>
+    const hw=lk&&sh!==null&&sh>sa, aw=lk&&sa!==null&&sa>sh;
+    const bdr=lv?"var(--gm)":color;
+    return `<div style="background:var(--card);border:1.5px solid ${bdr};border-radius:8px;padding:6px 8px;width:130px;height:${CH}px;box-sizing:border-box;flex-shrink:0;box-shadow:var(--sh)">
+      <div style="font-size:8px;font-weight:700;color:${color};display:flex;justify-content:space-between;margin-bottom:4px">
+        <span>P${mid}</span><span style="color:var(--t3);font-weight:500;font-size:8px">${lv?"🔴":lk?lt:ld}</span>
       </div>
-      <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
-        <span style="font-size:15px;line-height:1">${h.flag}</span>
-        <span style="flex:1;font-size:10px;font-weight:${sw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name}</span>
-        ${sh!==null?`<span style="font-size:13px;font-weight:800;color:${isLive?'var(--gm)':sw?'var(--bm)':'var(--t2)'};font-family:'Barlow Condensed',sans-serif">${sh}</span>`:''}
+      <div style="display:flex;align-items:center;gap:3px;margin-bottom:3px">
+        <span style="font-size:14px;line-height:1;flex-shrink:0">${h.flag}</span>
+        <span style="flex:1;font-size:10px;font-weight:${hw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name}</span>
+        ${sh!==null?`<span style="font-size:12px;font-weight:800;color:${lv?"var(--gm)":hw?"var(--bm)":"var(--t2)"};font-family:'Barlow Condensed',sans-serif;flex-shrink:0">${sh}</span>`:""}
       </div>
-      <div style="display:flex;align-items:center;gap:4px">
-        <span style="font-size:15px;line-height:1">${a.flag}</span>
+      <div style="display:flex;align-items:center;gap:3px">
+        <span style="font-size:14px;line-height:1;flex-shrink:0">${a.flag}</span>
         <span style="flex:1;font-size:10px;font-weight:${aw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
-        ${sa!==null?`<span style="font-size:13px;font-weight:800;color:${isLive?'var(--gm)':aw?'var(--bm)':'var(--t2)'};font-family:'Barlow Condensed',sans-serif">${sa}</span>`:''}
+        ${sa!==null?`<span style="font-size:12px;font-weight:800;color:${lv?"var(--gm)":aw?"var(--bm)":"var(--t2)"};font-family:'Barlow Condensed',sans-serif;flex-shrink:0">${sa}</span>`:""}
       </div>
     </div>`;
   }
 
-  // ── Bracket structure: groups of 2 R32 → 1 R16 → QF → SF → Final ──
-  // Bracket path (FIFA):
-  // P73,P75→P89  P74,P77→P90  P89,P90→P97  P97,P98→P101
-  // P76,P78→P91  P79,P80→P92  P91,P92→P98
-  // P81,P82→P93  P83,P84→P94  P93,P94→P99  P99,P100→P102
-  // P85,P86→P95  P87,P88→P96  P95,P96→P100
-  // Final: P101,P102→P104 | 3rd: P103
-
-  const c16="#1d6ed8",c8="#16a34a",cqf="#b45309",csf="#9333ea",cf="#dc2626",c3="#64748b";
-
-  // Build one round column as a vertical list with gap dividers
-  // segs: array of arrays of match ids; gaps between segments are bigger
-  function roundCol(segs, color, segGap, cardGap){
-    return segs.map(seg=>
-      seg.map(id=>bCard(id,color)).join(`<div style="height:${cardGap}px"></div>`)
-    ).join(`<div style="height:${segGap}px"></div>`);
+  /* ── SVG connector: 2 inputs → 1 output ── */
+  // y1,y2 = center-y of top and bottom input cards (relative to SVG top)
+  // yo    = center-y of output card
+  function conn2to1(y1,y2,yo,h){
+    const mx=14;
+    return `<svg width="28" height="${h}" style="flex-shrink:0;overflow:visible">
+      <line x1="0" y1="${y1}" x2="${mx}" y2="${y1}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${y2}" x2="${mx}" y2="${y2}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${mx}" y1="${y1}" x2="${mx}" y2="${y2}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${mx}" y1="${yo}" x2="28" y2="${yo}" stroke="var(--bor)" stroke-width="1.5"/>
+    </svg>`;
+  }
+  function connArrow(yo,h){
+    return `<svg width="16" height="${h}" style="flex-shrink:0;overflow:visible">
+      <line x1="0" y1="${yo}" x2="16" y2="${yo}" stroke="var(--bor)" stroke-width="1.5"/>
+    </svg>`;
   }
 
-  // Card height ~64px + gap. We need each "slot" to take equal vertical space.
-  const CH=64, CG=8, slotH=CH+CG; // slot = card + gap below
+  /* ── Build one bracket arm: 4 R32 cards → 2 R16 → 1 QF ── */
+  // r32a,r32b feed r16a; r32c,r32d feed r16b; r16a,r16b feed qf
+  // Returns {html, totalH, qfCY} where qfCY is center-y of QF card for upstream connectors
+  function arm(r32a,r32b,r32c,r32d, r16a,r16b, qf, c16,c8,cqf){
+    const slot=CH+CG;
+    // Col0: 4 R32 cards stacked, gap CG between each, extra gap between pairs
+    const pairGap=CG*3; // gap between the two R32 pairs
+    const col0H=4*CH+2*CG+pairGap;
+    // center-y of each R32 card within col0
+    const cy32=[
+      CH/2,
+      CH+CG+CH/2,
+      CH+CG+pairGap+CH+CH/2,  // wait — need to recalc
+    ];
+    // positions: card0 top=0, card1 top=CH+CG, card2 top=2*(CH+CG)+pairGap-CG, card3 top=card2+(CH+CG)
+    const tops32=[0, CH+CG, 2*(CH+CG)+pairGap, 3*(CH+CG)+pairGap];
+    const cy32_=[tops32[0]+CH/2, tops32[1]+CH/2, tops32[2]+CH/2, tops32[3]+CH/2];
+    const totalH32=tops32[3]+CH;
 
-  // R32: 16 cards in 8 pairs (2 per R16), pairs grouped in 4 groups of 2 pairs (per QF)
-  // Pair gap within same R16: CG. Between R16 pairs: CG + slotH*2 (to center next R16).
-  // Actually use simple uniform layout: each tab shows its own round as a clean list.
-  // Tabs: 16avos (all 16), Octavos (8), Cuartos (4), Semis (2), Final (1+1)
+    // Col1 connector: pair0(cy32_[0],cy32_[1])→r16a; pair1(cy32_[2],cy32_[3])→r16b
+    const r16a_cy=(cy32_[0]+cy32_[1])/2;
+    const r16b_cy=(cy32_[2]+cy32_[3])/2;
+    const totalH_c1=totalH32;
 
-  // Build panel HTML per round
-  function listPanel(ids, color, label){
-    return `<div style="font-size:9px;font-weight:700;color:${color};letter-spacing:.6px;margin-bottom:10px;text-transform:uppercase">${label}</div>` +
-      ids.map(id=>bCard(id,color)).join(`<div style="height:8px"></div>`);
+    // Col2: two R16 cards at r16a_cy-CH/2 and r16b_cy-CH/2
+    // Col3 connector: (r16a_cy, r16b_cy) → qf_cy
+    const qf_cy=(r16a_cy+r16b_cy)/2;
+    const totalH_arm=totalH32;
+
+    // Build HTML
+    const col0html=
+      bCard(r32a,c16)+`<div style="height:${CG}px"></div>`+
+      bCard(r32b,c16)+`<div style="height:${pairGap}px"></div>`+
+      bCard(r32c,c16)+`<div style="height:${CG}px"></div>`+
+      bCard(r32d,c16);
+
+    const svg01=conn2to1(cy32_[0],cy32_[1],r16a_cy,totalH_c1)+
+                conn2to1(cy32_[2],cy32_[3],r16b_cy,totalH_c1);
+    // Actually need ONE svg spanning full height with all 4 lines
+    const svg01combined=`<svg width="28" height="${totalH_c1}" style="flex-shrink:0;overflow:visible">
+      <line x1="0" y1="${cy32_[0]}" x2="14" y2="${cy32_[0]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${cy32_[1]}" x2="14" y2="${cy32_[1]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="14" y1="${cy32_[0]}" x2="14" y2="${cy32_[1]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="14" y1="${r16a_cy}" x2="28" y2="${r16a_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${cy32_[2]}" x2="14" y2="${cy32_[2]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${cy32_[3]}" x2="14" y2="${cy32_[3]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="14" y1="${cy32_[2]}" x2="14" y2="${cy32_[3]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="14" y1="${r16b_cy}" x2="28" y2="${r16b_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+    </svg>`;
+
+    const r16a_top=Math.round(r16a_cy-CH/2);
+    const r16b_top=Math.round(r16b_cy-CH/2);
+    const col1html=`<div style="position:relative;height:${totalH_arm}px;width:130px;flex-shrink:0">
+      <div style="position:absolute;top:${r16a_top}px">${bCard(r16a,c8)}</div>
+      <div style="position:absolute;top:${r16b_top}px">${bCard(r16b,c8)}</div>
+    </div>`;
+
+    const svg12=`<svg width="28" height="${totalH_arm}" style="flex-shrink:0;overflow:visible">
+      <line x1="0" y1="${r16a_cy}" x2="14" y2="${r16a_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${r16b_cy}" x2="14" y2="${r16b_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="14" y1="${r16a_cy}" x2="14" y2="${r16b_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="14" y1="${qf_cy}" x2="28" y2="${qf_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+    </svg>`;
+
+    const qf_top=Math.round(qf_cy-CH/2);
+    const col2html=`<div style="position:relative;height:${totalH_arm}px;width:130px;flex-shrink:0">
+      <div style="position:absolute;top:${qf_top}px">${bCard(qf,cqf)}</div>
+    </div>`;
+
+    return {
+      html:`<div style="display:flex;align-items:flex-start;gap:0">
+        <div style="display:flex;flex-direction:column">${col0html}</div>
+        ${svg01combined}
+        ${col1html}
+        ${svg12}
+        ${col2html}
+      </div>`,
+      totalH:totalH_arm,
+      qfCY:qf_cy
+    };
   }
 
-  // Bracket view: horizontal scroll with connected columns
-  // R32 pairs that feed each R16, grouped by which QF they feed
-  // QF1 (P97): P89(←P73,P75), P90(←P74,P77)
-  // QF2 (P98): P91(←P76,P78), P92(←P79,P80)
-  // QF3 (P99): P93(←P81,P82), P94(←P83,P84)
-  // QF4 (P100): P95(←P85,P86), P96(←P87,P88)
+  /* ── Colors ── */
+  const c16="#1d6ed8",c8="#16a34a",cqf="#b45309",csf="#9333ea",cf="#dc2626",c3p="#64748b";
 
-  const bracket = [
-    // [r32_pair, r16, qf, sf, final]
-    [[73,75],[74,77], 89,90, 97, 101, 104],
-    [[76,78],[79,80], 91,92, 98, 101, 104],
-    [[81,82],[83,84], 93,94, 99, 102, 104],
-    [[85,86],[87,88], 95,96,100, 102, 104],
+  /* ── 4 arms ── */
+  // Arm1: P73,P75,P74,P77 → P89,P90 → P97
+  // Arm2: P76,P78,P79,P80 → P91,P92 → P98
+  // Arm3: P83,P84,P81,P82 → P93,P94 → P99
+  // Arm4: P86,P88,P85,P87 → P95,P96 → P100
+  const arm1=arm(73,75,74,77, 89,90, 97,  c16,c8,cqf);
+  const arm2=arm(76,78,79,80, 91,92, 98,  c16,c8,cqf);
+  const arm3=arm(83,84,81,82, 93,94, 99,  c16,c8,cqf);
+  const arm4=arm(86,88,85,87, 95,96, 100, c16,c8,cqf);
+
+  /* ── SF: arm1+arm2 → SF1(P101), arm3+arm4 → SF2(P102) ── */
+  // Each arm has totalH and qfCY. Stack arm1 then arm2 with armGap between.
+  const armGap=24;
+
+  function sfBlock(a1,a2, sfId, qf1id,qf2id, csf){
+    const sf1_cy=a1.qfCY;  // QF1 center relative to a1 top
+    const sf2_cy=a1.totalH+armGap+a2.qfCY; // QF2 center relative to block top
+    const sf_cy=(sf1_cy+sf2_cy)/2;
+    const blockH=a1.totalH+armGap+a2.totalH;
+
+    // We need to extract just the QF card from each arm for the SF connector
+    // The arm already rendered the QF inside a position:relative div.
+    // For the SF connector we use the known qfCY values.
+    const svgSF=`<svg width="28" height="${blockH}" style="flex-shrink:0;overflow:visible">
+      <line x1="0" y1="${sf1_cy}" x2="14" y2="${sf1_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${sf2_cy}" x2="14" y2="${sf2_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="14" y1="${sf1_cy}" x2="14" y2="${sf2_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="14" y1="${sf_cy}" x2="28" y2="${sf_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+    </svg>`;
+
+    const sfTop=Math.round(sf_cy-CH/2);
+    const sfCol=`<div style="position:relative;height:${blockH}px;width:130px;flex-shrink:0">
+      <div style="position:absolute;top:${sfTop}px">${bCard(sfId,csf)}</div>
+    </div>`;
+
+    return {
+      html:`<div style="display:flex;align-items:flex-start;gap:0">
+        <div style="display:flex;flex-direction:column">
+          ${a1.html}
+          <div style="height:${armGap}px"></div>
+          ${a2.html}
+        </div>
+        ${svgSF}
+        ${sfCol}
+      </div>`,
+      blockH,
+      sfCY:sf_cy
+    };
+  }
+
+  const top=sfBlock(arm1,arm2, 101, 97,98, csf);
+  const bot=sfBlock(arm3,arm4, 102, 99,100,csf);
+
+  /* ── Final + 3rd: top.SF + bot.SF → Final ── */
+  const halfGap=32;
+  const final_sf1_cy=top.sfCY;
+  const final_sf2_cy=top.blockH+halfGap+bot.sfCY;
+  const final_cy=(final_sf1_cy+final_sf2_cy)/2;
+  const fullH=top.blockH+halfGap+bot.blockH;
+
+  const svgFinal=`<svg width="28" height="${fullH}" style="flex-shrink:0;overflow:visible">
+    <line x1="0" y1="${final_sf1_cy}" x2="14" y2="${final_sf1_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="0" y1="${final_sf2_cy}" x2="14" y2="${final_sf2_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="14" y1="${final_sf1_cy}" x2="14" y2="${final_sf2_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="14" y1="${final_cy}" x2="28" y2="${final_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+  </svg>`;
+
+  const finalTop=Math.round(final_cy-CH/2);
+  const thirdTop=Math.round(final_cy+CH/2+20);
+  const finalCol=`<div style="position:relative;height:${fullH}px;width:140px;flex-shrink:0">
+    <div style="position:absolute;top:${finalTop}px">
+      <div style="font-size:8px;font-weight:700;color:${cf};letter-spacing:.4px;margin-bottom:4px">🏆 FINAL</div>
+      ${bCard(104,cf)}
+    </div>
+    <div style="position:absolute;top:${thirdTop}px">
+      <div style="font-size:8px;font-weight:700;color:${c3p};letter-spacing:.4px;margin-bottom:4px">🥉 3ER PUESTO</div>
+      ${bCard(103,c3p)}
+    </div>
+  </div>`;
+
+  /* ── Tab panels ── */
+  const c16h="#1d6ed8",c8h="#16a34a",cqfh="#b45309",csfh="#9333ea",cfh="#dc2626";
+
+  // Grid panel for list views
+  function gridPanel(ids,color,label){
+    return `<div style="font-size:9px;font-weight:700;color:${color};letter-spacing:.6px;margin-bottom:10px;text-transform:uppercase">${label}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${ids.map(id=>bCard(id,color)).join("")}</div>`;
+  }
+
+  const panels=[
+    // 0: Bracket (full horizontal scroll)
+    `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px">
+      <div style="display:inline-flex;align-items:flex-start;gap:0;padding:4px 2px">
+        <div style="display:flex;flex-direction:column">
+          ${top.html}
+          <div style="height:${halfGap}px"></div>
+          ${bot.html}
+        </div>
+        ${svgFinal}
+        ${finalCol}
+      </div>
+    </div>`,
+    // 1: 16avos list
+    gridPanel([73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88],c16h,"16avos de final"),
+    // 2: Octavos
+    gridPanel([89,90,91,92,93,94,95,96],c8h,"Octavos de final"),
+    // 3: Cuartos
+    gridPanel([97,98,99,100],cqfh,"Cuartos de final"),
+    // 4: Semis
+    gridPanel([101,102],csfh,"Semifinales"),
+    // 5: Final + 3er
+    `<div style="font-size:9px;font-weight:700;color:${cfh};letter-spacing:.6px;margin-bottom:8px;text-transform:uppercase">Final</div>
+     <div style="margin-bottom:16px">${bCard(104,cfh)}</div>
+     <div style="font-size:9px;font-weight:700;color:${c3p};letter-spacing:.6px;margin-bottom:8px;text-transform:uppercase">🥉 Tercer puesto</div>
+     ${bCard(103,c3p)}`,
   ];
 
-  // Build horizontal bracket as scrollable div with 5 columns
-  // Each column is flex-column. Rows aligned by bracket position using spacers.
-  // Col0: R32 (groups of 4 cards per QF quarter)
-  // Col1: R16 (groups of 2 per QF quarter, each centered vs 4 R32 cards)
-  // Col2: QF (1 per quarter, centered vs 2 R16 cards)
-  // Col3: SF (1 per half, centered vs 2 QF cards)
-  // Col4: Final + 3rd place
-
-  // Heights: slot=CH+CG=72px. Pair=2*CH+CG=136px. Quad=4*CH+3*CG=280px.
-  const slot=CH+CG; // 72
-  const pair=2*CH+CG; // 136
-  const quad=4*CH+3*CG; // 280
-  const half=8*CH+7*CG; // 568
-  // Between QF quarters in col0: no extra gap (just CG)
-  // Between top/bottom halves (after col0 card 7): SF boundary
-
-  // Build column 0 (R32) — 16 cards, ordered by bracket:
-  // Group by QF quarter: [73,75,74,77] | [76,78,79,80] | [81,82,83,84] | [85,86,87,88]
-  const col0ids=[[73,75,74,77],[76,78,79,80],[81,82,83,84],[85,86,87,88]];
-  const col0html=col0ids.map(q=>
-    q.map(id=>bCard(id,c16)).join(`<div style="height:${CG}px"></div>`)
-  ).join(`<div style="height:${CG*3}px"></div>`);
-
-  // Col1 (R16) — 8 cards in 4 pairs, each centered vs its 4-card R32 group
-  // Offset before first card: (quad - pair) / 2 = (280-136)/2 = 72
-  const r16offset=Math.round((quad-pair)/2);
-  // Gap between R16 pairs: quad + CG*3 - pair - CG = quad - pair + CG*2 = 144+16=160
-  const r16gap=quad-pair+CG*3;
-  const col1ids=[[[89,90],[91,92],[93,94],[95,96]]];
-  const col1html=`<div style="height:${r16offset}px"></div>`+
-    [[89,90],[91,92],[93,94],[95,96]].map(p=>
-      p.map(id=>bCard(id,c8)).join(`<div style="height:${CG}px"></div>`)
-    ).join(`<div style="height:${r16gap}px"></div>`);
-
-  // Col2 (QF) — 4 cards, each centered vs its 2-card R16 pair
-  // Within each R16 pair: pair=2*CH+CG=136. QF card offset = (pair - CH)/2 = 36
-  // QF offset from col top = r16offset + (pair-CH)/2
-  const qfOffset=r16offset+Math.round((pair-CH)/2);
-  const qfGap=r16gap+pair+CG-CH; // gap between QF cards
-  const col2html=`<div style="height:${qfOffset}px"></div>`+
-    [97,98,99,100].map(id=>bCard(id,cqf))
-    .join(`<div style="height:${qfGap}px"></div>`);
-
-  // Col3 (SF) — 2 cards, each centered vs its 2 QF cards
-  const sfOffset=qfOffset+Math.round((qfGap+CH+CG-CH)/2);
-  // Wait: SF centered vs QF pair (2 cards). QF pair height = 2*CH+qfGap? No — qfGap is between individual QF cards.
-  // Each SF covers 2 QF cards. Height spanned = 2*CH + qfGap (between the 2 QF).
-  // SF center = sfOffset should be at center of first 2 QF cards.
-  // First QF at qfOffset, second QF at qfOffset+CH+CG+qfGap... wait qfGap is the gap BETWEEN the two QF cards in one half.
-  // Recalc: qfGap = gap between QF card 0 and QF card 1 (P97 and P98 = same SF half)
-  // P97 at qfOffset, P98 at qfOffset + CH + qfGap_between_same_half
-  // But I set qfGap as gap between ALL QF cards — P97 to P98 and P98 to P99 etc.
-  // Fix: use same gap for all 4, SF covers first 2 and second 2.
-  const sfBlockH = CH + qfGap + CH; // height of 2 QF cards in same SF half
-  const sfOff = qfOffset + Math.round((sfBlockH - CH) / 2);
-  const sfBetween = sfBlockH + qfGap; // gap between the two SF cards
-  const col3html=`<div style="height:${sfOff}px"></div>`+
-    bCard(101,csf)+
-    `<div style="height:${sfBetween}px"></div>`+
-    bCard(102,csf);
-
-  // Col4 (Final + 3rd place)
-  const finalOff = sfOff + Math.round((sfBetween + CH + CG - CH) / 2);
-  const col4html=`<div style="height:${finalOff}px"></div>`+
-    `<div style="font-size:9px;font-weight:700;color:${cf};letter-spacing:.5px;margin-bottom:6px">🏆 FINAL</div>`+
-    bCard(104,cf)+
-    `<div style="height:32px"></div>`+
-    `<div style="font-size:9px;font-weight:700;color:${c3};letter-spacing:.5px;margin-bottom:6px">🥉 3ER PUESTO</div>`+
-    bCard(103,c3);
-
-  // Connector SVG between two adjacent columns
-  // connector(n, pairEvery): draws n bracket connectors, each connecting 2 input rows to 1 output row
-  function connectorSVG(inputOffsets, outputOffsets, totalH){
-    const w=32;
-    let paths="";
-    inputOffsets.forEach(([y1,y2],i)=>{
-      const yo=outputOffsets[i];
-      const mid_x=w/2;
-      paths+=`<line x1="0" y1="${y1}" x2="${mid_x}" y2="${y1}" stroke="var(--bor)" stroke-width="1.5"/>
-              <line x1="0" y1="${y2}" x2="${mid_x}" y2="${y2}" stroke="var(--bor)" stroke-width="1.5"/>
-              <line x1="${mid_x}" y1="${y1}" x2="${mid_x}" y2="${y2}" stroke="var(--bor)" stroke-width="1.5"/>
-              <line x1="${mid_x}" y1="${yo}" x2="${w}" y2="${yo}" stroke="var(--bor)" stroke-width="1.5"/>`;
-    });
-    return `<svg width="${w}" height="${totalH}" style="flex-shrink:0;overflow:visible">${paths}</svg>`;
-  }
-
-  // ── Tabs + content ──
   const TABS=[
-    {label:"16avos", color:c16},
-    {label:"Octavos",color:c8},
-    {label:"Cuartos",color:cqf},
-    {label:"Semis",  color:csf},
-    {label:"Final",  color:cf},
-  ];
-
-  const panelContents=[
-    // 16avos: list view (too many for bracket on mobile)
-    `<div style="font-size:9px;font-weight:700;color:${c16};letter-spacing:.6px;margin-bottom:8px">16AVOS DE FINAL</div>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-       ${[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88].map(id=>bCard(id,c16)).join("")}
-     </div>`,
-    // Octavos
-    `<div style="font-size:9px;font-weight:700;color:${c8};letter-spacing:.6px;margin-bottom:8px">OCTAVOS DE FINAL</div>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-       ${[89,90,91,92,93,94,95,96].map(id=>bCard(id,c8)).join("")}
-     </div>`,
-    // Cuartos
-    `<div style="font-size:9px;font-weight:700;color:${cqf};letter-spacing:.6px;margin-bottom:8px">CUARTOS DE FINAL</div>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-       ${[97,98,99,100].map(id=>bCard(id,cqf)).join("")}
-     </div>`,
-    // Semis
-    `<div style="font-size:9px;font-weight:700;color:${csf};letter-spacing:.6px;margin-bottom:8px">SEMIFINALES</div>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-       ${[101,102].map(id=>bCard(id,csf)).join("")}
-     </div>`,
-    // Final + 3rd
-    `<div style="font-size:9px;font-weight:700;color:${cf};letter-spacing:.6px;margin-bottom:8px">FINAL</div>
-     <div style="margin-bottom:16px">${bCard(104,cf)}</div>
-     <div style="font-size:9px;font-weight:700;color:${c3};letter-spacing:.6px;margin-bottom:8px">🥉 TERCER PUESTO</div>
-     <div>${bCard(103,c3)}</div>
-     <div style="margin-top:20px;background:var(--bg);border-radius:var(--rs);padding:10px 12px;border:1px solid var(--bor)">
-       <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:.5px;margin-bottom:8px">CAMINO AL TÍTULO</div>
-       <div style="font-size:10px;color:var(--t2);line-height:1.8">
-         🔵 Semi 1: P97 vs P98 → P101<br>
-         🔵 Semi 2: P99 vs P100 → P102<br>
-         🏆 Final: P101 vs P102 → P104<br>
-         🥉 3er Puesto: P101 vs P102
-       </div>
-     </div>`,
+    {label:"🏆 Bracket"},
+    {label:"16avos"},
+    {label:"Octavos"},
+    {label:"Cuartos"},
+    {label:"Semis"},
+    {label:"Final"},
   ];
 
   const tabsHTML=TABS.map((t,i)=>
-    `<button id="ctab-${i}" onclick="switchCrucesTab(${i})" style="padding:6px 13px;border-radius:20px;border:1.5px solid ${i===0?'var(--bm)':'var(--bor)'};background:${i===0?'var(--bl)':'var(--card)'};color:${i===0?'var(--bd)':'var(--t2)'};font-size:11px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s">${t.label}</button>`
+    `<button id="ctab-${i}" onclick="switchCrucesTab(${i})" style="padding:6px 12px;border-radius:20px;border:1.5px solid ${i===0?"var(--bm)":"var(--bor)"};background:${i===0?"var(--bl)":"var(--card)"};color:${i===0?"var(--bd)":"var(--t2)"};font-size:11px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s">${t.label}</button>`
   ).join("");
 
-  const panelsHTML=panelContents.map((content,i)=>
-    `<div id="cpanel-${i}" style="display:${i===0?'block':'none'}">${content}</div>`
+  const panelsHTML=panels.map((p,i)=>
+    `<div id="cpanel-${i}" style="display:${i===0?"block":"none"}">${p}</div>`
   ).join("");
 
   document.getElementById("ms-cruces").innerHTML=`
@@ -2359,8 +2360,8 @@ function buildCruces(){
     <div>${panelsHTML}</div>`;
 }
 
-window.switchCrucesTab = function(idx){
-  for(let i=0;i<5;i++){
+window.switchCrucesTab=function(idx){
+  for(let i=0;i<6;i++){
     const tab=document.getElementById("ctab-"+i);
     const panel=document.getElementById("cpanel-"+i);
     if(!tab||!panel) continue;
