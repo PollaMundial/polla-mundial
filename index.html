@@ -2370,24 +2370,40 @@ function buildCruces(){
   // We need a vertical SVG connecting left.sfy (within left half) down to the Final card
   // Simple approach: arrow line from SF card right edge down to Final block
 
+  const _totalH = left.halfH + right.halfH;
+  const _sfTopCY = left.sfy;           // SF top center-y within stacked block
+  const _sfBotCY = left.halfH + right.sfy; // SF bottom center-y
+  const _finalCY = (_sfTopCY + _sfBotCY) / 2;
+  const _finalTop = Math.round(_finalCY - CH/2);
+  const _thirdTop = _finalTop + CH + 12;
+  const CONNW = 28;
+
+  const _svgConn = `<svg width="${CONNW}" height="${_totalH}" style="flex-shrink:0;overflow:visible;align-self:flex-start">
+    <line x1="0" y1="${_sfTopCY}" x2="${CONNW/2}" y2="${_sfTopCY}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="0" y1="${_sfBotCY}" x2="${CONNW/2}" y2="${_sfBotCY}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="${CONNW/2}" y1="${_sfTopCY}" x2="${CONNW/2}" y2="${_sfBotCY}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="${CONNW/2}" y1="${_finalCY}" x2="${CONNW}" y2="${_finalCY}" stroke="var(--bor)" stroke-width="1.5"/>
+  </svg>`;
+
+  const _finalCol = `<div style="position:relative;width:${CW+20}px;height:${_totalH}px;flex-shrink:0">
+    <div style="position:absolute;top:${_finalTop}px">
+      <div style="font-size:8px;font-weight:700;color:${cf};letter-spacing:.4px;margin-bottom:4px">🏆 FINAL</div>
+      ${bCard(104,cf)}
+    </div>
+    <div style="position:absolute;top:${_thirdTop}px">
+      <div style="font-size:8px;font-weight:700;color:${c3p};letter-spacing:.4px;margin-bottom:4px">🥉 3ER PUESTO</div>
+      ${bCard(103,c3p)}
+    </div>
+  </div>`;
+
   const bracketFull=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px">
-    <div style="display:inline-block;min-width:max-content;padding:2px 4px">
-      <div style="font-size:8px;font-weight:700;color:${csf};letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase">— Mitad Superior →</div>
-      <div style="display:flex;align-items:flex-start">${left.html}</div>
-      <div style="border-top:1px dashed var(--bor);margin:10px 0"></div>
-      <div style="display:flex;align-items:center;gap:16px;padding:6px 0">
-        <div>
-          <div style="font-size:8px;font-weight:700;color:${cf};letter-spacing:.4px;margin-bottom:4px">🏆 FINAL</div>
-          ${bCard(104,cf)}
-        </div>
-        <div>
-          <div style="font-size:8px;font-weight:700;color:${c3p};letter-spacing:.4px;margin-bottom:4px">🥉 3ER PUESTO</div>
-          ${bCard(103,c3p)}
-        </div>
+    <div style="display:inline-flex;align-items:flex-start;padding:2px 4px">
+      <div style="display:flex;flex-direction:column">
+        <div>${left.html}</div>
+        <div>${right.html}</div>
       </div>
-      <div style="border-bottom:1px dashed var(--bor);margin:10px 0"></div>
-      <div style="font-size:8px;font-weight:700;color:${csf};letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase">— Mitad Inferior →</div>
-      <div style="display:flex;align-items:flex-start">${right.html}</div>
+      ${_svgConn}
+      ${_finalCol}
     </div>
   </div>`;
 
