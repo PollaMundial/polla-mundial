@@ -886,8 +886,8 @@ const M_RAW = [
   {id:62,ph:"Grupos",gr:"I",aDate:"2026-06-26",aTime:"16:00",home:"Senegal",hf:"🇸🇳",away:"Irak",af:"🇮🇶",r:"g",q:"Total tarjetas: menos o más de 3.5",opts:["Menos de 3.5","Más de 3.5"]},
   {id:63,ph:"Grupos",gr:"H",aDate:"2026-06-26",aTime:"21:00",home:"Uruguay",hf:"🇺🇾",away:"España",af:"🇪🇸",r:"g",q:"¿Cuál equipo recibe la 1ª tarjeta amarilla?",opts:["Uruguay","España","Ninguno"]},
   {id:64,ph:"Grupos",gr:"H",aDate:"2026-06-26",aTime:"21:00",home:"Cabo Verde",hf:"🇨🇻",away:"Arabia Saudita",af:"🇸🇦",r:"g",q:"¿Habrá penal?",opts:["Sí","No"]},
-  {id:65,ph:"Grupos",gr:"G",aDate:"2026-06-26",aTime:"23:00",home:"Nueva Zelanda",hf:"🇳🇿",away:"Bélgica",af:"🇧🇪",r:"g",q:"¿Ambos equipos anotan?",opts:["Sí","No"]},
-  {id:66,ph:"Grupos",gr:"G",aDate:"2026-06-26",aTime:"23:00",home:"Egipto",hf:"🇪🇬",away:"Irán",af:"🇮🇷",r:"g",q:"Total goles: menos o más de 1.5",opts:["Menos de 1.5","Más de 1.5"]},
+  {id:65,ph:"Grupos",gr:"G",aDate:"2026-06-27",aTime:"00:00",home:"Nueva Zelanda",hf:"🇳🇿",away:"Bélgica",af:"🇧🇪",r:"g",q:"¿Ambos equipos anotan?",opts:["Sí","No"]},
+  {id:66,ph:"Grupos",gr:"G",aDate:"2026-06-27",aTime:"00:00",home:"Egipto",hf:"🇪🇬",away:"Irán",af:"🇮🇷",r:"g",q:"Total goles: menos o más de 1.5",opts:["Menos de 1.5","Más de 1.5"]},
   {id:67,ph:"Grupos",gr:"L",aDate:"2026-06-27",aTime:"18:00",home:"Panamá",hf:"🇵🇦",away:"Inglaterra",af:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",r:"g",q:"¿Habrá tarjeta roja?",opts:["Sí","No"]},
   {id:68,ph:"Grupos",gr:"L",aDate:"2026-06-27",aTime:"18:00",home:"Croacia",hf:"🇭🇷",away:"Ghana",af:"🇬🇭",r:"g",q:"¿Habrá gol en el segundo tiempo?",opts:["Sí","No"]},
   {id:69,ph:"Grupos",gr:"K",aDate:"2026-06-27",aTime:"20:30",home:"Colombia",hf:"🇨🇴",away:"Portugal",af:"🇵🇹",r:"g",q:"¿Ambos equipos anotan?",opts:["Sí","No"]},
@@ -2010,100 +2010,366 @@ function renderGroupTable(g){
 }
 function buildCruces(){
   const results = pollaLive.results||{};
+  const standings = calcStandings();
+  const top8 = calcTop8(standings);
 
-  // Resolve real team name from Firebase results, fallback to slot label
-  function teamName(matchId, side){
-    const r = results[matchId];
-    if(!r) return null;
-    const name = side==="home" ? r.homeTeam : r.awayTeam;
-    return (name && !name.includes("TBD") && !name.includes("Gan.") && !name.includes("Per.")) ? name : null;
+  // ── Resolve team slot from group standings ──
+  function resolveSlot(slot){
+    const m1 = slot.match(/^([12])°\s*([A-L])$/);
+    if(m1){
+      const pos=parseInt(m1[1])-1, grp=m1[2];
+      const st=standings[grp]; if(!st) return {name:slot,flag:"🏳️"};
+      const gMs=MATCHES.filter(m=>m.ph==="Grupos"&&m.gr===grp);
+      const played=gMs.filter(m=>results[m.id]?.locked).length;
+      if(played===gMs.length && st[pos]?.pj>0) return {name:st[pos].n,flag:st[pos].f};
+      return {name:slot,flag:"🏳️"};
+    }
+    const m3=slot.match(/^3°\s*([A-L]+)$/);
+    if(m3){
+      const eligible=m3[1].split("");
+      const top8groups=Object.entries(standings)
+        .filter(([g,t])=>top8.has(t[2]?.n)&&t[2]?.pj>0)
+        .map(([g])=>g).sort();
+      if(top8groups.length===8){
+        const assigned=getFIFAThird(top8groups);
+        if(assigned[slot]){
+          const g=assigned[slot], t=standings[g]?.[2];
+          if(t?.pj>0) return {name:t.n,flag:t.f};
+        }
+      }
+      return {name:slot,flag:"🏳️"};
+    }
+    return {name:slot,flag:"🏳️"};
   }
 
-  // Get display name for a match slot
-  function slotName(m){
-    const h = teamName(m.id,"home") || m.home;
-    const a = teamName(m.id,"away") || m.away;
-    return {h, a,
-      hf: teamName(m.id,"home") ? (getTeamFlag(teamName(m.id,"home"))||m.hf) : m.hf,
-      af: teamName(m.id,"away") ? (getTeamFlag(teamName(m.id,"away"))||m.af) : m.af
+  // ── FIFA Annex C — third-place assignment table ──
+  // Key = 8 sorted group letters; value = [P79a,P85a,P81a,P74a,P82a,P77a,P87a,P80a]
+  function getFIFAThird(g8){
+    const key=g8.join("");
+    const T={
+      "EFGHIJKL":["E","J","I","F","H","G","L","K"],
+      "DFGHIJKL":["H","G","I","D","J","F","L","K"],
+      "DEGHIJKL":["E","J","I","D","H","G","L","K"],
+      "DEFHIJKL":["E","J","I","D","H","F","L","K"],
+      "DEFGIJKL":["E","G","I","D","J","F","L","K"],
+      "DEFGHJKL":["E","G","J","D","H","F","L","K"],
+      "DEFGHIKL":["E","G","I","D","H","F","L","K"],
+      "DEFGHIJL":["E","G","J","D","H","F","L","I"],
+      "DEFGHIJK":["E","G","J","D","H","F","I","K"],
+      "CFGHIJKL":["H","G","I","C","J","F","L","K"],
+      "CEGHIJKL":["E","J","I","C","H","G","L","K"],
+      "CEFHIJKL":["E","J","I","C","H","F","L","K"],
+      "CEFGIJKL":["E","G","I","C","J","F","L","K"],
+      "CEFGHJKL":["E","G","J","C","H","F","L","K"],
+      "CEFGHIKL":["E","G","I","C","H","F","L","K"],
+      "CEFGHIJL":["E","G","J","C","H","F","L","I"],
+      "CEFGHIJK":["E","G","J","C","H","F","I","K"],
+      "CDGHIJKL":["H","G","I","C","J","D","L","K"],
+      "CDFHIJKL":["C","J","I","D","H","F","L","K"],
+      "CDFGIJKL":["C","G","I","D","J","F","L","K"],
+      "CDFGHJKL":["C","G","J","D","H","F","L","K"],
+      "CDFGHIKL":["C","G","I","D","H","F","L","K"],
+      "CDFGHIJL":["C","G","J","D","H","F","L","I"],
+      "CDFGHIJK":["C","G","J","D","H","F","I","K"],
+      "CDEHIJKL":["E","J","I","C","H","D","L","K"],
+      "CDEGHIJL":["E","G","J","C","H","D","L","I"],
+      "CDEGHIJK":["E","G","J","C","H","D","I","K"],
+      "CDEGHIKL":["E","G","I","C","H","D","L","K"],
+      "CDEFIJKL":["C","J","E","D","I","F","L","K"],
+      "CDEFHJKL":["C","J","E","D","H","F","L","K"],
+      "CDEFHIKL":["C","E","I","D","H","F","L","K"],
+      "CDEFHIJL":["C","J","E","D","H","F","L","I"],
+      "CDEFHIJK":["C","J","E","D","H","F","I","K"],
+      "CDEFGJKL":["C","G","E","D","J","F","L","K"],
+      "CDEFGIKL":["C","G","E","D","I","F","L","K"],
+      "CDEFGIJL":["C","G","E","D","J","F","L","I"],
+      "CDEFGIJK":["C","G","E","D","J","F","I","K"],
+      "CDEFGHKL":["C","G","E","D","H","F","L","K"],
+      "CDEFGHJL":["C","G","J","D","H","F","L","E"],
+      "CDEFGHJK":["C","G","J","D","H","F","E","K"],
+      "CDEFGHIL":["C","G","E","D","H","F","L","I"],
+      "CDEFGHIK":["C","G","E","D","H","F","I","K"],
+      "CDEFGHIJ":["C","G","J","D","H","F","E","I"],
+      "BFGHIJKL":["H","J","B","F","I","G","L","K"],
+      "BEGHIJKL":["E","J","I","B","H","G","L","K"],
+      "BEFHIJKL":["E","J","B","F","I","H","L","K"],
+      "BEFGIJKL":["E","J","B","F","I","G","L","K"],
+      "BEFGHJKL":["E","J","B","F","H","G","L","K"],
+      "BEFGHIKL":["E","G","B","F","I","H","L","K"],
+      "BEFGHIJL":["E","J","B","F","H","G","L","I"],
+      "BEFGHIJK":["E","J","B","F","H","G","I","K"],
+      "BDGHIJKL":["H","J","B","D","I","G","L","K"],
+      "BDFHIJKL":["H","J","B","D","I","F","L","K"],
+      "BDFGIJKL":["I","G","B","D","J","F","L","K"],
+      "BDFGHJKL":["H","G","B","D","J","F","L","K"],
+      "BDFGHIKL":["H","G","B","D","I","F","L","K"],
+      "BDFGHIJL":["H","G","B","D","J","F","L","I"],
+      "BDFGHIJK":["H","G","B","D","J","F","I","K"],
+      "BDEHIJKL":["E","J","B","D","I","H","L","K"],
+      "BDEGHIKL":["E","G","B","D","I","H","L","K"],
+      "BDEGHIJL":["E","J","B","D","H","G","L","I"],
+      "BDEGHIJK":["E","J","B","D","H","G","I","K"],
+      "BDEFIJKL":["E","J","B","D","I","F","L","K"],
+      "BDEFHJKL":["E","J","B","D","H","F","L","K"],
+      "BDEFHIKL":["E","I","B","D","H","F","L","K"],
+      "BDEFHIJL":["E","J","B","D","H","F","L","I"],
+      "BDEFHIJK":["E","J","B","D","H","F","I","K"],
+      "BDEFGJKL":["E","G","B","D","J","F","L","K"],
+      "BDEFGIKL":["E","G","B","D","I","F","L","K"],
+      "BDEFGIJL":["E","G","B","D","J","F","L","I"],
+      "BDEFGIJK":["E","G","B","D","J","F","I","K"],
+      "BDEFGHKL":["E","G","B","D","H","F","L","K"],
     };
+    const v=T[key]; if(!v) return {};
+    // Slots: P79a,P85a,P81a,P74a,P82a,P77a,P87a,P80a
+    return {"3°CEFHI":v[0],"3°EFGIJ":v[1],"3°BEFIJ":v[2],"3°ABCDF":v[3],
+            "3°AEHIJ":v[4],"3°CDFGH":v[5],"3°DEIJL":v[6],"3°EHIJK":v[7]};
   }
 
-  // Round definitions
-  const rounds = [
-    {key:"r32", label:"16avos",  ids:[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88], color:"#1d6ed8"},
-    {key:"r16", label:"Octavos", ids:[89,90,91,92,93,94,95,96],                          color:"#16a34a"},
-    {key:"qf",  label:"Cuartos", ids:[97,98,99,100],                                     color:"#b45309"},
-    {key:"sf",  label:"Semis",   ids:[101,102],                                          color:"#9333ea"},
-    {key:"f",   label:"Final",   ids:[103,104],                                          color:"#dc2626"},
-  ];
+  // ── Resolve display name for a match participant ──
+  function slotInfo(matchId, side){
+    const m=MATCHES.find(x=>x.id===matchId); if(!m) return {name:"?",flag:"🏳️"};
+    const r=results[matchId];
+    if(r){
+      const rn=side==="home"?r.homeTeam:r.awayTeam;
+      if(rn&&!rn.includes("TBD")&&!rn.match(/^[12°]/)&&!rn.match(/^3°/)&&!rn.includes("Gan.")&&!rn.includes("Per."))
+        return {name:rn,flag:getTeamFlag(rn)||"🏳️"};
+    }
+    const raw=side==="home"?m.home:m.away;
+    if(m.ph==="16avos") return resolveSlot(raw);
+    return {name:raw,flag:"🏳️"};
+  }
 
-  function matchCard(mid, color){
-    const m = MATCHES.find(x=>x.id===mid); if(!m) return "";
-    const {h,a,hf,af} = slotName(m);
-    const localT = m.aTime && m.aTime!=="s/h" ? toLocal(m.aDate, m.aTime).time : m.aTime;
-    const localD = m.aDate ? toLocal(m.aDate, m.aTime||"00:00").date : "";
-    const r = results[mid];
-    const isLocked = !!r?.locked;
-    const isLive = !!r?.live;
-    const statusDot = isLocked ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--t3);margin-right:4px"></span>`
-                    : isLive   ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gm);animation:pls 1.5s infinite;margin-right:4px"></span>`
-                    : "";
-    const scoreStr = isLocked ? `<span style="font-size:13px;font-weight:800;color:var(--t1);font-family:'Barlow Condensed',sans-serif">${r.h}–${r.a}</span>`
-                   : isLive   ? `<span style="font-size:12px;font-weight:800;color:var(--gm);font-family:'Barlow Condensed',sans-serif">${r.h}–${r.a}</span>`
-                   : `<span style="font-size:10px;color:var(--t3)">${localD}</span>`;
-    return `<div style="background:var(--card);border:1px solid var(--bor);border-radius:10px;padding:10px 11px;margin-bottom:8px;box-shadow:var(--sh)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <span style="font-size:9px;font-weight:700;color:${color};letter-spacing:.4px">P${mid}</span>
-        <span style="font-size:10px;color:var(--t3)">${statusDot}${localT||""}</span>
+  // ── Bracket card ──
+  function bCard(mid,color){
+    const m=MATCHES.find(x=>x.id===mid); if(!m) return "<div style='height:64px'></div>";
+    const h=slotInfo(mid,"home"), a=slotInfo(mid,"away");
+    const r=results[mid], isLocked=!!r?.locked, isLive=!!r?.live;
+    const localT=m.aTime&&m.aTime!=="s/h"?toLocal(m.aDate,m.aTime).time:"";
+    const localD=m.aDate?toLocal(m.aDate,m.aTime||"00:00").date:"";
+    const bdr=isLive?`var(--gm)`:isLocked?`var(--bor)`:color;
+    const sh=r?.h??null, sa=r?.a??null;
+    const sw=isLocked&&sh!==null&&sh>sa, aw=isLocked&&sa!==null&&sa>sh;
+    return `<div style="background:var(--card);border:1.5px solid ${bdr};border-radius:9px;padding:7px 9px;width:138px;flex-shrink:0;box-shadow:var(--sh)">
+      <div style="font-size:8px;font-weight:700;color:${color};display:flex;justify-content:space-between;margin-bottom:5px">
+        <span>P${mid}</span><span style="color:var(--t3);font-weight:500">${isLive?'🔴':isLocked?localT:localD}</span>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-        <div style="flex:1;text-align:center">
-          <div style="font-size:20px;line-height:1">${hf}</div>
-          <div style="font-size:11px;font-weight:600;color:var(--t1);margin-top:3px;line-height:1.2;word-break:break-word">${h}</div>
-        </div>
-        <div style="flex-shrink:0;text-align:center;min-width:36px">${scoreStr}</div>
-        <div style="flex:1;text-align:center">
-          <div style="font-size:20px;line-height:1">${af}</div>
-          <div style="font-size:11px;font-weight:600;color:var(--t1);margin-top:3px;line-height:1.2;word-break:break-word">${a}</div>
-        </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+        <span style="font-size:15px;line-height:1">${h.flag}</span>
+        <span style="flex:1;font-size:10px;font-weight:${sw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name}</span>
+        ${sh!==null?`<span style="font-size:13px;font-weight:800;color:${isLive?'var(--gm)':sw?'var(--bm)':'var(--t2)'};font-family:'Barlow Condensed',sans-serif">${sh}</span>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span style="font-size:15px;line-height:1">${a.flag}</span>
+        <span style="flex:1;font-size:10px;font-weight:${aw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
+        ${sa!==null?`<span style="font-size:13px;font-weight:800;color:${isLive?'var(--gm)':aw?'var(--bm)':'var(--t2)'};font-family:'Barlow Condensed',sans-serif">${sa}</span>`:''}
       </div>
     </div>`;
   }
 
-  // Build HTML for each round panel
-  function roundPanel(round){
-    return `<div style="column-count:2;column-gap:10px">${round.ids.map(id=>matchCard(id,round.color)).join("")}</div>`;
+  // ── Bracket structure: groups of 2 R32 → 1 R16 → QF → SF → Final ──
+  // Bracket path (FIFA):
+  // P73,P75→P89  P74,P77→P90  P89,P90→P97  P97,P98→P101
+  // P76,P78→P91  P79,P80→P92  P91,P92→P98
+  // P81,P82→P93  P83,P84→P94  P93,P94→P99  P99,P100→P102
+  // P85,P86→P95  P87,P88→P96  P95,P96→P100
+  // Final: P101,P102→P104 | 3rd: P103
+
+  const c16="#1d6ed8",c8="#16a34a",cqf="#b45309",csf="#9333ea",cf="#dc2626",c3="#64748b";
+
+  // Build one round column as a vertical list with gap dividers
+  // segs: array of arrays of match ids; gaps between segments are bigger
+  function roundCol(segs, color, segGap, cardGap){
+    return segs.map(seg=>
+      seg.map(id=>bCard(id,color)).join(`<div style="height:${cardGap}px"></div>`)
+    ).join(`<div style="height:${segGap}px"></div>`);
   }
 
-  // Build tabs + slider
-  const tabsHTML = rounds.map((r,i)=>
-    `<button id="ctab-${i}" onclick="switchCrucesTab(${i})" style="padding:6px 13px;border-radius:20px;border:1.5px solid ${i===0?'var(--bm)':'var(--bor)'};background:${i===0?'var(--bl)':'var(--card)'};color:${i===0?'var(--bd)':'var(--t2)'};font-size:11px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s">${r.label}</button>`
+  // Card height ~64px + gap. We need each "slot" to take equal vertical space.
+  const CH=64, CG=8, slotH=CH+CG; // slot = card + gap below
+
+  // R32: 16 cards in 8 pairs (2 per R16), pairs grouped in 4 groups of 2 pairs (per QF)
+  // Pair gap within same R16: CG. Between R16 pairs: CG + slotH*2 (to center next R16).
+  // Actually use simple uniform layout: each tab shows its own round as a clean list.
+  // Tabs: 16avos (all 16), Octavos (8), Cuartos (4), Semis (2), Final (1+1)
+
+  // Build panel HTML per round
+  function listPanel(ids, color, label){
+    return `<div style="font-size:9px;font-weight:700;color:${color};letter-spacing:.6px;margin-bottom:10px;text-transform:uppercase">${label}</div>` +
+      ids.map(id=>bCard(id,color)).join(`<div style="height:8px"></div>`);
+  }
+
+  // Bracket view: horizontal scroll with connected columns
+  // R32 pairs that feed each R16, grouped by which QF they feed
+  // QF1 (P97): P89(←P73,P75), P90(←P74,P77)
+  // QF2 (P98): P91(←P76,P78), P92(←P79,P80)
+  // QF3 (P99): P93(←P81,P82), P94(←P83,P84)
+  // QF4 (P100): P95(←P85,P86), P96(←P87,P88)
+
+  const bracket = [
+    // [r32_pair, r16, qf, sf, final]
+    [[73,75],[74,77], 89,90, 97, 101, 104],
+    [[76,78],[79,80], 91,92, 98, 101, 104],
+    [[81,82],[83,84], 93,94, 99, 102, 104],
+    [[85,86],[87,88], 95,96,100, 102, 104],
+  ];
+
+  // Build horizontal bracket as scrollable div with 5 columns
+  // Each column is flex-column. Rows aligned by bracket position using spacers.
+  // Col0: R32 (groups of 4 cards per QF quarter)
+  // Col1: R16 (groups of 2 per QF quarter, each centered vs 4 R32 cards)
+  // Col2: QF (1 per quarter, centered vs 2 R16 cards)
+  // Col3: SF (1 per half, centered vs 2 QF cards)
+  // Col4: Final + 3rd place
+
+  // Heights: slot=CH+CG=72px. Pair=2*CH+CG=136px. Quad=4*CH+3*CG=280px.
+  const slot=CH+CG; // 72
+  const pair=2*CH+CG; // 136
+  const quad=4*CH+3*CG; // 280
+  const half=8*CH+7*CG; // 568
+  // Between QF quarters in col0: no extra gap (just CG)
+  // Between top/bottom halves (after col0 card 7): SF boundary
+
+  // Build column 0 (R32) — 16 cards, ordered by bracket:
+  // Group by QF quarter: [73,75,74,77] | [76,78,79,80] | [81,82,83,84] | [85,86,87,88]
+  const col0ids=[[73,75,74,77],[76,78,79,80],[81,82,83,84],[85,86,87,88]];
+  const col0html=col0ids.map(q=>
+    q.map(id=>bCard(id,c16)).join(`<div style="height:${CG}px"></div>`)
+  ).join(`<div style="height:${CG*3}px"></div>`);
+
+  // Col1 (R16) — 8 cards in 4 pairs, each centered vs its 4-card R32 group
+  // Offset before first card: (quad - pair) / 2 = (280-136)/2 = 72
+  const r16offset=Math.round((quad-pair)/2);
+  // Gap between R16 pairs: quad + CG*3 - pair - CG = quad - pair + CG*2 = 144+16=160
+  const r16gap=quad-pair+CG*3;
+  const col1ids=[[[89,90],[91,92],[93,94],[95,96]]];
+  const col1html=`<div style="height:${r16offset}px"></div>`+
+    [[89,90],[91,92],[93,94],[95,96]].map(p=>
+      p.map(id=>bCard(id,c8)).join(`<div style="height:${CG}px"></div>`)
+    ).join(`<div style="height:${r16gap}px"></div>`);
+
+  // Col2 (QF) — 4 cards, each centered vs its 2-card R16 pair
+  // Within each R16 pair: pair=2*CH+CG=136. QF card offset = (pair - CH)/2 = 36
+  // QF offset from col top = r16offset + (pair-CH)/2
+  const qfOffset=r16offset+Math.round((pair-CH)/2);
+  const qfGap=r16gap+pair+CG-CH; // gap between QF cards
+  const col2html=`<div style="height:${qfOffset}px"></div>`+
+    [97,98,99,100].map(id=>bCard(id,cqf))
+    .join(`<div style="height:${qfGap}px"></div>`);
+
+  // Col3 (SF) — 2 cards, each centered vs its 2 QF cards
+  const sfOffset=qfOffset+Math.round((qfGap+CH+CG-CH)/2);
+  // Wait: SF centered vs QF pair (2 cards). QF pair height = 2*CH+qfGap? No — qfGap is between individual QF cards.
+  // Each SF covers 2 QF cards. Height spanned = 2*CH + qfGap (between the 2 QF).
+  // SF center = sfOffset should be at center of first 2 QF cards.
+  // First QF at qfOffset, second QF at qfOffset+CH+CG+qfGap... wait qfGap is the gap BETWEEN the two QF cards in one half.
+  // Recalc: qfGap = gap between QF card 0 and QF card 1 (P97 and P98 = same SF half)
+  // P97 at qfOffset, P98 at qfOffset + CH + qfGap_between_same_half
+  // But I set qfGap as gap between ALL QF cards — P97 to P98 and P98 to P99 etc.
+  // Fix: use same gap for all 4, SF covers first 2 and second 2.
+  const sfBlockH = CH + qfGap + CH; // height of 2 QF cards in same SF half
+  const sfOff = qfOffset + Math.round((sfBlockH - CH) / 2);
+  const sfBetween = sfBlockH + qfGap; // gap between the two SF cards
+  const col3html=`<div style="height:${sfOff}px"></div>`+
+    bCard(101,csf)+
+    `<div style="height:${sfBetween}px"></div>`+
+    bCard(102,csf);
+
+  // Col4 (Final + 3rd place)
+  const finalOff = sfOff + Math.round((sfBetween + CH + CG - CH) / 2);
+  const col4html=`<div style="height:${finalOff}px"></div>`+
+    `<div style="font-size:9px;font-weight:700;color:${cf};letter-spacing:.5px;margin-bottom:6px">🏆 FINAL</div>`+
+    bCard(104,cf)+
+    `<div style="height:32px"></div>`+
+    `<div style="font-size:9px;font-weight:700;color:${c3};letter-spacing:.5px;margin-bottom:6px">🥉 3ER PUESTO</div>`+
+    bCard(103,c3);
+
+  // Connector SVG between two adjacent columns
+  // connector(n, pairEvery): draws n bracket connectors, each connecting 2 input rows to 1 output row
+  function connectorSVG(inputOffsets, outputOffsets, totalH){
+    const w=32;
+    let paths="";
+    inputOffsets.forEach(([y1,y2],i)=>{
+      const yo=outputOffsets[i];
+      const mid_x=w/2;
+      paths+=`<line x1="0" y1="${y1}" x2="${mid_x}" y2="${y1}" stroke="var(--bor)" stroke-width="1.5"/>
+              <line x1="0" y1="${y2}" x2="${mid_x}" y2="${y2}" stroke="var(--bor)" stroke-width="1.5"/>
+              <line x1="${mid_x}" y1="${y1}" x2="${mid_x}" y2="${y2}" stroke="var(--bor)" stroke-width="1.5"/>
+              <line x1="${mid_x}" y1="${yo}" x2="${w}" y2="${yo}" stroke="var(--bor)" stroke-width="1.5"/>`;
+    });
+    return `<svg width="${w}" height="${totalH}" style="flex-shrink:0;overflow:visible">${paths}</svg>`;
+  }
+
+  // ── Tabs + content ──
+  const TABS=[
+    {label:"16avos", color:c16},
+    {label:"Octavos",color:c8},
+    {label:"Cuartos",color:cqf},
+    {label:"Semis",  color:csf},
+    {label:"Final",  color:cf},
+  ];
+
+  const panelContents=[
+    // 16avos: list view (too many for bracket on mobile)
+    `<div style="font-size:9px;font-weight:700;color:${c16};letter-spacing:.6px;margin-bottom:8px">16AVOS DE FINAL</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+       ${[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88].map(id=>bCard(id,c16)).join("")}
+     </div>`,
+    // Octavos
+    `<div style="font-size:9px;font-weight:700;color:${c8};letter-spacing:.6px;margin-bottom:8px">OCTAVOS DE FINAL</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+       ${[89,90,91,92,93,94,95,96].map(id=>bCard(id,c8)).join("")}
+     </div>`,
+    // Cuartos
+    `<div style="font-size:9px;font-weight:700;color:${cqf};letter-spacing:.6px;margin-bottom:8px">CUARTOS DE FINAL</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+       ${[97,98,99,100].map(id=>bCard(id,cqf)).join("")}
+     </div>`,
+    // Semis
+    `<div style="font-size:9px;font-weight:700;color:${csf};letter-spacing:.6px;margin-bottom:8px">SEMIFINALES</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+       ${[101,102].map(id=>bCard(id,csf)).join("")}
+     </div>`,
+    // Final + 3rd
+    `<div style="font-size:9px;font-weight:700;color:${cf};letter-spacing:.6px;margin-bottom:8px">FINAL</div>
+     <div style="margin-bottom:16px">${bCard(104,cf)}</div>
+     <div style="font-size:9px;font-weight:700;color:${c3};letter-spacing:.6px;margin-bottom:8px">🥉 TERCER PUESTO</div>
+     <div>${bCard(103,c3)}</div>
+     <div style="margin-top:20px;background:var(--bg);border-radius:var(--rs);padding:10px 12px;border:1px solid var(--bor)">
+       <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:.5px;margin-bottom:8px">CAMINO AL TÍTULO</div>
+       <div style="font-size:10px;color:var(--t2);line-height:1.8">
+         🔵 Semi 1: P97 vs P98 → P101<br>
+         🔵 Semi 2: P99 vs P100 → P102<br>
+         🏆 Final: P101 vs P102 → P104<br>
+         🥉 3er Puesto: P101 vs P102
+       </div>
+     </div>`,
+  ];
+
+  const tabsHTML=TABS.map((t,i)=>
+    `<button id="ctab-${i}" onclick="switchCrucesTab(${i})" style="padding:6px 13px;border-radius:20px;border:1.5px solid ${i===0?'var(--bm)':'var(--bor)'};background:${i===0?'var(--bl)':'var(--card)'};color:${i===0?'var(--bd)':'var(--t2)'};font-size:11px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s">${t.label}</button>`
   ).join("");
 
-  const panelsHTML = rounds.map((r,i)=>
-    `<div id="cpanel-${i}" style="display:${i===0?'block':'none'};padding-top:2px">${roundPanel(r)}</div>`
+  const panelsHTML=panelContents.map((content,i)=>
+    `<div id="cpanel-${i}" style="display:${i===0?'block':'none'}">${content}</div>`
   ).join("");
 
-  document.getElementById("ms-cruces").innerHTML = `
-    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-ms-overflow-style:none;scrollbar-width:none" id="cruces-tabs">${tabsHTML}</div>
+  document.getElementById("ms-cruces").innerHTML=`
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-ms-overflow-style:none;scrollbar-width:none">${tabsHTML}</div>
     <div>${panelsHTML}</div>`;
 }
 
 window.switchCrucesTab = function(idx){
-  const rounds = ["r32","r16","qf","sf","f"];
-  const colors = ["#1d6ed8","#16a34a","#b45309","#9333ea","#dc2626"];
-  rounds.forEach((_,i)=>{
-    const tab = document.getElementById("ctab-"+i);
-    const panel = document.getElementById("cpanel-"+i);
-    if(!tab||!panel) return;
-    const active = i===idx;
-    tab.style.background = active ? "var(--bl)" : "var(--card)";
-    tab.style.borderColor = active ? "var(--bm)" : "var(--bor)";
-    tab.style.color = active ? "var(--bd)" : "var(--t2)";
-    panel.style.display = active ? "block" : "none";
-  });
-  // Scroll active tab into view
+  for(let i=0;i<5;i++){
+    const tab=document.getElementById("ctab-"+i);
+    const panel=document.getElementById("cpanel-"+i);
+    if(!tab||!panel) continue;
+    const active=i===idx;
+    tab.style.background=active?"var(--bl)":"var(--card)";
+    tab.style.borderColor=active?"var(--bm)":"var(--bor)";
+    tab.style.color=active?"var(--bd)":"var(--t2)";
+    panel.style.display=active?"block":"none";
+  }
   document.getElementById("ctab-"+idx)?.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"});
 };
 
