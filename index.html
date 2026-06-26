@@ -594,7 +594,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div class="rule-title">🏆 Sistema de puntos</div>
         <table class="ptable">
           <tr><th>Tipo</th><th>Grupos</th><th>16avos</th><th>8vos</th><th>4tos</th><th>Semi/3°</th><th>Final</th></tr>
-          <tr><td>Marcador exacto</td><td>6</td><td>6</td><td>8</td><td>10</td><td>12</td><td>15</td></tr>
+          <tr><td>Marcador exacto</td><td>6</td><td>7</td><td>8</td><td>10</td><td>12</td><td>15</td></tr>
           <tr><td>Acertar dif. de goles</td><td>4</td><td>4</td><td>5</td><td>6</td><td>8</td><td>10</td></tr>
           <tr><td>Ganador/empate</td><td>3</td><td>3</td><td>4</td><td>5</td><td>6</td><td>8</td></tr>
           <tr><td>Resultado único</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td></tr>
@@ -806,7 +806,7 @@ const PTS_DEF = {g:{w:3,e:5,x:1},"16":{w:3,e:5,x:1},"8":{w:4,e:7,x:1},"4":{w:5,e
 // d = diferencia de goles, u = resultado único bonus
 const PTS_NEW = {
   g:  {e:6, d:4, w:3, u:3, x:1},
-  "16":{e:6, d:4, w:3, u:3, x:1},
+  "16":{e:7, d:4, w:3, u:3, x:1},
   "8": {e:8, d:5, w:4, u:3, x:1},
   "4": {e:10,d:6, w:5, u:3, x:2},
   "2": {e:12,d:8, w:6, u:3, x:2},
@@ -817,7 +817,7 @@ const SNAPSHOT_MATCH = 24; // Colombia vs Uzbekistán — snapshot after this ma
 let PTS = JSON.parse(JSON.stringify(PTS_DEF));
 const RB={g:"rb-g","16":"rb-16","8":"rb-8","4":"rb-4","2":"rb-2",f:"rb-f"};
 const RL={g:"Grupo","16":"16avos","8":"Octavos","4":"Cuartos","2":"Semifinal",f:"Final"};
-const PH_PTS={Grupos:"3pts · 5pts exacto · +1 extra","16avos":"3pts · 5pts exacto · +1 extra",Octavos:"4pts · 7pts exacto · +1 extra",Cuartos:"5pts · 9pts exacto · +2 extra",Semifinal:"7pts · 12pts exacto · +2 extra","3er Puesto":"7pts · 12pts exacto · +2 extra",Final:"10pts · 15pts exacto · +3 extra"};
+const PH_PTS={Grupos:"3pts · 6pts exacto · +1 extra","16avos":"3pts · 7pts exacto · +1 extra",Octavos:"4pts · 8pts exacto · +1 extra",Cuartos:"5pts · 10pts exacto · +2 extra",Semifinal:"6pts · 12pts exacto · +2 extra","3er Puesto":"6pts · 12pts exacto · +2 extra",Final:"8pts · 15pts exacto · +3 extra"};
 
 // MATCHES — fixture with Argentina time (UTC-3), each has localDate & localTime computed
 const M_RAW = [
