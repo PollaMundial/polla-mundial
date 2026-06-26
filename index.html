@@ -2362,18 +2362,32 @@ function buildCruces(){
     </div>
   </div>`;
 
-  // Actually build final+right properly:
-  const svgFinalR=`<svg width="${CONN}" height="${totalBracketH}" style="flex-shrink:0;overflow:visible">
-    <line x1="0" y1="${finalY}" x2="${CONN/2}" y2="${finalY}" stroke="var(--bor)" stroke-width="1.5"/>
-    <line x1="${CONN/2}" y1="${right.sfy}" x2="${CONN}" y2="${right.sfy}" stroke="var(--bor)" stroke-width="1.5"/>
-  </svg>`;
+  // Vertical layout: left half top → Final center → right half bottom
+  // Each half scrolls horizontally on its own row
+  const halfGap=20;
+
+  // SF connector for top half: SF card is on right, arrow points DOWN to Final
+  // We need a vertical SVG connecting left.sfy (within left half) down to the Final card
+  // Simple approach: arrow line from SF card right edge down to Final block
 
   const bracketFull=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px">
-    <div style="display:inline-flex;align-items:flex-start;gap:0;padding:4px 2px">
-      ${left.html}
-      ${svgFinal}
-      ${finalCol}
-      ${right.html}
+    <div style="display:inline-block;min-width:max-content;padding:2px 4px">
+      <div style="font-size:8px;font-weight:700;color:${csf};letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase">— Mitad Superior →</div>
+      <div style="display:flex;align-items:flex-start">${left.html}</div>
+      <div style="border-top:1px dashed var(--bor);margin:10px 0"></div>
+      <div style="display:flex;align-items:center;gap:16px;padding:6px 0">
+        <div>
+          <div style="font-size:8px;font-weight:700;color:${cf};letter-spacing:.4px;margin-bottom:4px">🏆 FINAL</div>
+          ${bCard(104,cf)}
+        </div>
+        <div>
+          <div style="font-size:8px;font-weight:700;color:${c3p};letter-spacing:.4px;margin-bottom:4px">🥉 3ER PUESTO</div>
+          ${bCard(103,c3p)}
+        </div>
+      </div>
+      <div style="border-bottom:1px dashed var(--bor);margin:10px 0"></div>
+      <div style="font-size:8px;font-weight:700;color:${csf};letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase">— Mitad Inferior →</div>
+      <div style="display:flex;align-items:flex-start">${right.html}</div>
     </div>
   </div>`;
 
