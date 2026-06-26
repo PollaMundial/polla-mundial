@@ -1439,8 +1439,8 @@ function renderMatches(){
   const results=pollaLive.results||{};
   let list=MATCHES;
   if(curFilter!=="Todos") list=MATCHES.filter(m=>m.ph===curFilter);
-  // Filter: show locked matches only in Resultados tab, and keep live matches visible (read-only)
-  list = list.filter(m=>!results[m.id]?.locked);
+  // Grupos locked → hidden (go to Resultados). Knockout locked → keep visible (show result)
+  list = list.filter(m=>!(results[m.id]?.locked && m.ph==="Grupos"));
   let lastPh="",lastGr="";
   list.forEach(m=>{
     if(m.ph!==lastPh){ lastPh=m.ph; lastGr="";
@@ -1454,6 +1454,35 @@ function renderMatches(){
     c.appendChild(buildCard(m,results[m.id]));
   });
   if(!list.length) c.innerHTML=`<div class="empty"><div class="ei">🔍</div><p>No hay partidos en esta fase.</p></div>`;
+}
+
+// Global slot resolver for knockout matches (used by buildCard and buildCruces)
+function resolveKnockoutSlot(slot){
+  const results=pollaLive.results||{};
+  const standings=calcStandings();
+  const top8=calcTop8(standings);
+  const m1=slot.match(/^([12])°\s*([A-L])$/);
+  if(m1){
+    const pos=parseInt(m1[1])-1,grp=m1[2],st=standings[grp];if(!st)return{name:slot,flag:null};
+    const gMs=MATCHES.filter(m=>m.ph==="Grupos"&&m.gr===grp);
+    if(gMs.filter(m=>results[m.id]?.locked).length===gMs.length&&st[pos]?.pj>0)return{name:st[pos].n,flag:st[pos].f};
+    return{name:slot,flag:null};
+  }
+  const m3=slot.match(/^3°\s*([A-L]+)$/);
+  if(m3){
+    const g8=Object.entries(standings).filter(([g,t])=>top8.has(t[2]?.n)&&t[2]?.pj>0).map(([g])=>g).sort();
+    if(g8.length===8){
+      const key=g8.join("");
+      const T={"EFGHIJKL":["E","J","I","F","H","G","L","K"],"DFGHIJKL":["H","G","I","D","J","F","L","K"],"DEGHIJKL":["E","J","I","D","H","G","L","K"],"DEFHIJKL":["E","J","I","D","H","F","L","K"],"DEFGIJKL":["E","G","I","D","J","F","L","K"],"DEFGHJKL":["E","G","J","D","H","F","L","K"],"DEFGHIKL":["E","G","I","D","H","F","L","K"],"DEFGHIJL":["E","G","J","D","H","F","L","I"],"DEFGHIJK":["E","G","J","D","H","F","I","K"],"CFGHIJKL":["H","G","I","C","J","F","L","K"],"CEGHIJKL":["E","J","I","C","H","G","L","K"],"CEFHIJKL":["E","J","I","C","H","F","L","K"],"CEFGIJKL":["E","G","I","C","J","F","L","K"],"CEFGHJKL":["E","G","J","C","H","F","L","K"],"CEFGHIKL":["E","G","I","C","H","F","L","K"],"CEFGHIJL":["E","G","J","C","H","F","L","I"],"CEFGHIJK":["E","G","J","C","H","F","I","K"],"CDGHIJKL":["H","G","I","C","J","D","L","K"],"CDFHIJKL":["C","J","I","D","H","F","L","K"],"CDFGIJKL":["C","G","I","D","J","F","L","K"],"CDFGHJKL":["C","G","J","D","H","F","L","K"],"CDFGHIKL":["C","G","I","D","H","F","L","K"],"CDFGHIJL":["C","G","J","D","H","F","L","I"],"CDFGHIJK":["C","G","J","D","H","F","I","K"],"CDEHIJKL":["E","J","I","C","H","D","L","K"],"CDEGHIJL":["E","G","J","C","H","D","L","I"],"CDEGHIJK":["E","G","J","C","H","D","I","K"],"CDEGHIKL":["E","G","I","C","H","D","L","K"],"CDEFIJKL":["C","J","E","D","I","F","L","K"],"CDEFHJKL":["C","J","E","D","H","F","L","K"],"CDEFHIKL":["C","E","I","D","H","F","L","K"],"CDEFHIJL":["C","J","E","D","H","F","L","I"],"CDEFHIJK":["C","J","E","D","H","F","I","K"],"CDEFGJKL":["C","G","E","D","J","F","L","K"],"CDEFGIKL":["C","G","E","D","I","F","L","K"],"CDEFGIJL":["C","G","E","D","J","F","L","I"],"CDEFGIJK":["C","G","E","D","J","F","I","K"],"CDEFGHKL":["C","G","E","D","H","F","L","K"],"CDEFGHJL":["C","G","J","D","H","F","L","E"],"CDEFGHJK":["C","G","J","D","H","F","E","K"],"CDEFGHIL":["C","G","E","D","H","F","L","I"],"CDEFGHIK":["C","G","E","D","H","F","I","K"],"CDEFGHIJ":["C","G","J","D","H","F","E","I"],"BFGHIJKL":["H","J","B","F","I","G","L","K"],"BEGHIJKL":["E","J","I","B","H","G","L","K"],"BEFHIJKL":["E","J","B","F","I","H","L","K"],"BEFGIJKL":["E","J","B","F","I","G","L","K"],"BEFGHJKL":["E","J","B","F","H","G","L","K"],"BEFGHIKL":["E","G","B","F","I","H","L","K"],"BEFGHIJL":["E","J","B","F","H","G","L","I"],"BEFGHIJK":["E","J","B","F","H","G","I","K"],"BDGHIJKL":["H","J","B","D","I","G","L","K"],"BDFHIJKL":["H","J","B","D","I","F","L","K"],"BDFGIJKL":["I","G","B","D","J","F","L","K"],"BDFGHJKL":["H","G","B","D","J","F","L","K"],"BDFGHIKL":["H","G","B","D","I","F","L","K"],"BDFGHIJL":["H","G","B","D","J","F","L","I"],"BDFGHIJK":["H","G","B","D","J","F","I","K"],"BDEHIJKL":["E","J","B","D","I","H","L","K"],"BDEGHIKL":["E","G","B","D","I","H","L","K"],"BDEGHIJL":["E","J","B","D","H","G","L","I"],"BDEGHIJK":["E","J","B","D","H","G","I","K"],"BDEFIJKL":["E","J","B","D","I","F","L","K"],"BDEFHJKL":["E","J","B","D","H","F","L","K"],"BDEFHIKL":["E","I","B","D","H","F","L","K"],"BDEFHIJL":["E","J","B","D","H","F","L","I"],"BDEFHIJK":["E","J","B","D","H","F","I","K"],"BDEFGJKL":["E","G","B","D","J","F","L","K"],"BDEFGIKL":["E","G","B","D","I","F","L","K"],"BDEFGIJL":["E","G","B","D","J","F","L","I"],"BDEFGIJK":["E","G","B","D","J","F","I","K"],"BDEFGHKL":["E","G","B","D","H","F","L","K"]};
+      const v=T[key];
+      if(v){
+        const asgn={"3°CEFHI":v[0],"3°EFGIJ":v[1],"3°BEFIJ":v[2],"3°ABCDF":v[3],"3°AEHIJ":v[4],"3°CDFGH":v[5],"3°DEIJL":v[6],"3°EHIJK":v[7]};
+        if(asgn[slot]){const t=standings[asgn[slot]]?.[2];if(t?.pj>0)return{name:t.n,flag:t.f};}
+      }
+    }
+    return{name:slot,flag:null};
+  }
+  return{name:slot,flag:null};
 }
 
 // Resolves __HOME__ and __AWAY__ placeholders in opts/questions using real team names
@@ -1470,8 +1499,10 @@ function buildCard(m,result){
   const myPicks=pollaLive.members?.[CUR.uid]?.picks||{};
   // Use real team names from API for knockout rounds
   const r0=pollaLive.results?.[m.id];
-  const homeDisplay = (m.ph!=="Grupos"&&r0?.homeTeam&&!r0.homeTeam.includes("TBD")) ? r0.homeTeam : m.home;
-  const awayDisplay = (m.ph!=="Grupos"&&r0?.awayTeam&&!r0.awayTeam.includes("TBD")) ? r0.awayTeam : m.away;
+  const homeDisplay = (m.ph!=="Grupos"&&r0?.homeTeam&&!r0.homeTeam.includes("TBD")) ? r0.homeTeam : (m.ph!=="Grupos" ? resolveKnockoutSlot(m.home).name : m.home);
+  const awayDisplay = (m.ph!=="Grupos"&&r0?.awayTeam&&!r0.awayTeam.includes("TBD")) ? r0.awayTeam : (m.ph!=="Grupos" ? resolveKnockoutSlot(m.away).name : m.away);
+  const homeFlagR = m.ph!=="Grupos" ? (resolveKnockoutSlot(m.home).flag||m.hf) : m.hf;
+  const awayFlagR = m.ph!=="Grupos" ? (resolveKnockoutSlot(m.away).flag||m.af) : m.af;
   const myPick=myPicks[m.id]||{h:0,a:0,extra:null};
   if(!localScores[m.id]) localScores[m.id]={h:myPick.h||0,a:myPick.a||0};
   const sh=localScores[m.id].h, sa=localScores[m.id].a;
@@ -1498,9 +1529,9 @@ function buildCard(m,result){
     }).join("");
     d.innerHTML=`<div class="mmeta"><span class="mmeta-l">📅 ${m.date} · ${m.time}</span><span class="rbadge ${rb}">${rl}</span></div>
     <div class="mrow">
-      <div class="team"><div class="tf">${m.hf}</div><div class="tn">${homeDisplay}</div></div>
+      <div class="team"><div class="tf">${homeFlagR}</div><div class="tn">${homeDisplay}</div></div>
       <div class="lkscore">${result.h} – ${result.a}</div>
-      <div class="team"><div class="tf">${m.af}</div><div class="tn">${awayDisplay}</div></div>
+      <div class="team"><div class="tf">${awayFlagR}</div><div class="tn">${awayDisplay}</div></div>
     </div>
     <div class="extrasec">
       <div class="extlbl">❓ Pregunta extra · <span class="lkbadge">Resp: ${result.qr||"—"}</span></div>
@@ -1521,9 +1552,9 @@ function buildCard(m,result){
     const hasPick=!!(myPick.h!=null||myPick.extra);
     d.innerHTML=`<div class="mmeta"><span class="mmeta-l" style="font-size:14px;font-weight:700"><span class="live-dot"></span>En vivo <span style="font-size:13px;font-weight:500;color:var(--t2)">${result.min?"· "+result.min+"'":""}</span></span><span class="rbadge ${rb}">${rl}</span></div>
     <div class="mrow" style="margin:10px 0">
-      <div class="team"><div class="tf" style="font-size:28px">${m.hf}</div><div class="tn" style="font-size:15px;font-weight:500">${homeDisplay}</div></div>
+      <div class="team"><div class="tf" style="font-size:28px">${homeFlagR}</div><div class="tn" style="font-size:15px;font-weight:500">${homeDisplay}</div></div>
       <div class="lkscore" style="color:var(--bm);font-size:34px;font-weight:700">${result.h} – ${result.a}</div>
-      <div class="team"><div class="tf" style="font-size:28px">${m.af}</div><div class="tn" style="font-size:15px;font-weight:500">${awayDisplay}</div></div>
+      <div class="team"><div class="tf" style="font-size:28px">${awayFlagR}</div><div class="tn" style="font-size:15px;font-weight:500">${awayDisplay}</div></div>
     </div>
     <div class="extrasec">
       <div style="background:var(--bg);border-radius:var(--rs);padding:8px 10px;margin-bottom:8px">
@@ -1547,9 +1578,9 @@ function buildCard(m,result){
     if(isKOPassed){
       d.innerHTML=`<div class="mmeta"><span class="mmeta-l">📅 ${m.date} · ${m.time}</span><span class="rbadge ${rb}">${rl}</span></div>
       <div class="mrow">
-        <div class="team"><div class="tf">${m.hf}</div><div class="tn">${homeDisplay}</div></div>
+        <div class="team"><div class="tf">${homeFlagR}</div><div class="tn">${homeDisplay}</div></div>
         <div class="lkscore" style="font-size:20px;color:var(--t3)">vs</div>
-        <div class="team"><div class="tf">${m.af}</div><div class="tn">${awayDisplay}</div></div>
+        <div class="team"><div class="tf">${awayFlagR}</div><div class="tn">${awayDisplay}</div></div>
       </div>
       <div class="extrasec">
         <div class="extlbl">❓ ${m.q}</div>
@@ -1560,13 +1591,13 @@ function buildCard(m,result){
     const hasPick=!!(myPicks[m.id]&&(myPick.h>0||myPick.a>0||myPick.extra));
     d.innerHTML=`<div class="mmeta"><span class="mmeta-l">📅 ${m.date} · ${m.time}</span><span class="rbadge ${rb}">${rl} · hasta ${rp.e}pts</span></div>
     <div class="mrow">
-      <div class="team"><div class="tf">${m.hf}</div><div class="tn">${homeDisplay}</div></div>
+      <div class="team"><div class="tf">${homeFlagR}</div><div class="tn">${homeDisplay}</div></div>
       <div class="sarea">
         <div class="sbg"><button class="sup" onclick="cs(${m.id},'h',1)">▲</button><div class="sv" id="sh${m.id}">${sh}</div><button class="sdn" onclick="cs(${m.id},'h',-1)">▼</button></div>
         <div class="ssep">–</div>
         <div class="sbg"><button class="sup" onclick="cs(${m.id},'a',1)">▲</button><div class="sv" id="sa${m.id}">${sa}</div><button class="sdn" onclick="cs(${m.id},'a',-1)">▼</button></div>
       </div>
-      <div class="team"><div class="tf">${m.af}</div><div class="tn">${awayDisplay}</div></div>
+      <div class="team"><div class="tf">${awayFlagR}</div><div class="tn">${awayDisplay}</div></div>
     </div>
     <div class="extrasec">
       <div class="extlbl">❓ Pregunta extra <span style="color:var(--gm);font-weight:700">+${rp.x}pt${rp.x>1?"s":""}</span></div>
@@ -2013,26 +2044,23 @@ function buildCruces(){
   const standings=calcStandings();
   const top8=calcTop8(standings);
 
-  /* ── Resolve slot → {name, flag} ── */
   function resolveSlot(slot){
     const m1=slot.match(/^([12])°\s*([A-L])$/);
     if(m1){
-      const pos=parseInt(m1[1])-1, grp=m1[2], st=standings[grp]; if(!st) return {name:slot,flag:"🏳️"};
+      const pos=parseInt(m1[1])-1,grp=m1[2],st=standings[grp];if(!st)return{name:slot,flag:"🏳️"};
       const gMs=MATCHES.filter(m=>m.ph==="Grupos"&&m.gr===grp);
-      if(gMs.filter(m=>results[m.id]?.locked).length===gMs.length&&st[pos]?.pj>0)
-        return {name:st[pos].n, flag:st[pos].f};
-      return {name:slot,flag:"🏳️"};
+      if(gMs.filter(m=>results[m.id]?.locked).length===gMs.length&&st[pos]?.pj>0)return{name:st[pos].n,flag:st[pos].f};
+      return{name:slot,flag:"🏳️"};
     }
     const m3=slot.match(/^3°\s*([A-L]+)$/);
     if(m3){
       const g8=Object.entries(standings).filter(([g,t])=>top8.has(t[2]?.n)&&t[2]?.pj>0).map(([g])=>g).sort();
-      if(g8.length===8){const a=getFIFAThird(g8); if(a[slot]){const t=standings[a[slot]]?.[2]; if(t?.pj>0) return {name:t.n,flag:t.f};}}
-      return {name:slot,flag:"🏳️"};
+      if(g8.length===8){const a=getFIFAThird(g8);if(a[slot]){const t=standings[a[slot]]?.[2];if(t?.pj>0)return{name:t.n,flag:t.f};}}
+      return{name:slot,flag:"🏳️"};
     }
-    return {name:slot,flag:"🏳️"};
+    return{name:slot,flag:"🏳️"};
   }
 
-  /* ── FIFA Annex C ── */
   function getFIFAThird(g8){
     const key=g8.join("");
     const T={
@@ -2073,282 +2101,297 @@ function buildCruces(){
       "BDEFGIKL":["E","G","B","D","I","F","L","K"],"BDEFGIJL":["E","G","B","D","J","F","L","I"],
       "BDEFGIJK":["E","G","B","D","J","F","I","K"],"BDEFGHKL":["E","G","B","D","H","F","L","K"],
     };
-    const v=T[key]; if(!v) return {};
-    return {"3°CEFHI":v[0],"3°EFGIJ":v[1],"3°BEFIJ":v[2],"3°ABCDF":v[3],
-            "3°AEHIJ":v[4],"3°CDFGH":v[5],"3°DEIJL":v[6],"3°EHIJK":v[7]};
+    const v=T[key];if(!v)return{};
+    return{"3°CEFHI":v[0],"3°EFGIJ":v[1],"3°BEFIJ":v[2],"3°ABCDF":v[3],
+           "3°AEHIJ":v[4],"3°CDFGH":v[5],"3°DEIJL":v[6],"3°EHIJK":v[7]};
   }
 
-  /* ── slotInfo for any match participant ── */
   function slotInfo(mid,side){
-    const m=MATCHES.find(x=>x.id===mid); if(!m) return {name:"?",flag:"🏳️"};
+    const m=MATCHES.find(x=>x.id===mid);if(!m)return{name:"?",flag:"🏳️"};
     const r=results[mid];
     if(r){const rn=side==="home"?r.homeTeam:r.awayTeam;
       if(rn&&!rn.includes("TBD")&&!rn.match(/^[12]°/)&&!rn.match(/^3°/)&&!rn.includes("Gan.")&&!rn.includes("Per."))
-        return {name:rn,flag:getTeamFlag(rn)||"🏳️"};}
+        return{name:rn,flag:getTeamFlag(rn)||"🏳️"};}
     const raw=side==="home"?m.home:m.away;
-    if(m.ph==="16avos") return resolveSlot(raw);
-    return {name:raw,flag:"🏳️"};
+    if(m.ph==="16avos")return resolveSlot(raw);
+    return{name:raw,flag:"🏳️"};
   }
 
-  /* ── Single bracket card ── */
-  const CH=62, CG=6;
+  // ── Card ──
+  const CW=128, CH=60, CG=6;
   function bCard(mid,color){
-    const m=MATCHES.find(x=>x.id===mid); if(!m) return `<div style="height:${CH}px;width:130px"></div>`;
-    const h=slotInfo(mid,"home"), a=slotInfo(mid,"away");
-    const r=results[mid], lk=!!r?.locked, lv=!!r?.live;
+    const m=MATCHES.find(x=>x.id===mid);if(!m)return`<div style="width:${CW}px;height:${CH}px"></div>`;
+    const h=slotInfo(mid,"home"),a=slotInfo(mid,"away");
+    const r=results[mid],lk=!!r?.locked,lv=!!r?.live;
     const lt=m.aTime&&m.aTime!=="s/h"?toLocal(m.aDate,m.aTime).time:"";
     const ld=m.aDate?toLocal(m.aDate,m.aTime||"00:00").date:"";
-    const sh=r?.h??null, sa=r?.a??null;
-    const hw=lk&&sh!==null&&sh>sa, aw=lk&&sa!==null&&sa>sh;
-    const bdr=lv?"var(--gm)":color;
-    return `<div style="background:var(--card);border:1.5px solid ${bdr};border-radius:8px;padding:6px 8px;width:130px;height:${CH}px;box-sizing:border-box;flex-shrink:0;box-shadow:var(--sh)">
-      <div style="font-size:8px;font-weight:700;color:${color};display:flex;justify-content:space-between;margin-bottom:4px">
-        <span>P${mid}</span><span style="color:var(--t3);font-weight:500;font-size:8px">${lv?"🔴":lk?lt:ld}</span>
+    const sh=r?.h??null,sa=r?.a??null;
+    const hw=lk&&sh!==null&&sh>sa,aw=lk&&sa!==null&&sa>sh;
+    return`<div style="background:var(--card);border:1.5px solid ${lv?"var(--gm)":color};border-radius:7px;padding:5px 7px;width:${CW}px;height:${CH}px;box-sizing:border-box;box-shadow:var(--sh);flex-shrink:0">
+      <div style="font-size:7.5px;font-weight:700;color:${color};display:flex;justify-content:space-between;margin-bottom:3px">
+        <span>P${mid}</span><span style="color:var(--t3);font-weight:400">${lv?"🔴":lk?lt:ld}</span>
       </div>
-      <div style="display:flex;align-items:center;gap:3px;margin-bottom:3px">
-        <span style="font-size:14px;line-height:1;flex-shrink:0">${h.flag}</span>
-        <span style="flex:1;font-size:10px;font-weight:${hw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name}</span>
-        ${sh!==null?`<span style="font-size:12px;font-weight:800;color:${lv?"var(--gm)":hw?"var(--bm)":"var(--t2)"};font-family:'Barlow Condensed',sans-serif;flex-shrink:0">${sh}</span>`:""}
+      <div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
+        <span style="font-size:13px;line-height:1;flex-shrink:0">${h.flag}</span>
+        <span style="flex:1;font-size:9.5px;font-weight:${hw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name}</span>
+        ${sh!==null?`<span style="font-size:11px;font-weight:800;color:${lv?"var(--gm)":hw?"var(--bm)":"var(--t2)"};font-family:'Barlow Condensed',sans-serif;flex-shrink:0">${sh}</span>`:""}
       </div>
       <div style="display:flex;align-items:center;gap:3px">
-        <span style="font-size:14px;line-height:1;flex-shrink:0">${a.flag}</span>
-        <span style="flex:1;font-size:10px;font-weight:${aw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
-        ${sa!==null?`<span style="font-size:12px;font-weight:800;color:${lv?"var(--gm)":aw?"var(--bm)":"var(--t2)"};font-family:'Barlow Condensed',sans-serif;flex-shrink:0">${sa}</span>`:""}
+        <span style="font-size:13px;line-height:1;flex-shrink:0">${a.flag}</span>
+        <span style="flex:1;font-size:9.5px;font-weight:${aw?700:500};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
+        ${sa!==null?`<span style="font-size:11px;font-weight:800;color:${lv?"var(--gm)":aw?"var(--bm)":"var(--t2)"};font-family:'Barlow Condensed',sans-serif;flex-shrink:0">${sa}</span>`:""}
       </div>
     </div>`;
   }
 
-  /* ── SVG connector: 2 inputs → 1 output ── */
-  // y1,y2 = center-y of top and bottom input cards (relative to SVG top)
-  // yo    = center-y of output card
-  function conn2to1(y1,y2,yo,h){
-    const mx=14;
-    return `<svg width="28" height="${h}" style="flex-shrink:0;overflow:visible">
-      <line x1="0" y1="${y1}" x2="${mx}" y2="${y1}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="0" y1="${y2}" x2="${mx}" y2="${y2}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="${mx}" y1="${y1}" x2="${mx}" y2="${y2}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="${mx}" y1="${yo}" x2="28" y2="${yo}" stroke="var(--bor)" stroke-width="1.5"/>
-    </svg>`;
-  }
-  function connArrow(yo,h){
-    return `<svg width="16" height="${h}" style="flex-shrink:0;overflow:visible">
-      <line x1="0" y1="${yo}" x2="16" y2="${yo}" stroke="var(--bor)" stroke-width="1.5"/>
-    </svg>`;
-  }
+  // ── Bracket layout ──
+  // Each "pair" = 2 R32 cards → connector → 1 R16 card
+  // Each "quad" = 2 pairs → connector → 1 QF card
+  // The bracket reads left-to-right: R32 | conn | R16 | conn | QF | conn | SF | conn | Final
+  //
+  // From the image (left half, top to bottom):
+  //   P74,P77 → P89 ]
+  //   P73,P75 → P90 ] → P97 → P101 → Final
+  //   P83,P84 → P93 ]
+  //   P81,P82 → P94 ] → P98 → P101
+  //
+  // Right half (right side of image, also feeding inward):
+  //   P76,P78 → P91 ]
+  //   P79,P80 → P92 ] → P99 → P102 → Final
+  //   P86,P88 → P95 ]
+  //   P85,P87 → P96 ] → P100 → P102
+  //
+  // We render left half then right half horizontally, with Final in the middle.
 
-  /* ── Build one bracket arm: 4 R32 cards → 2 R16 → 1 QF ── */
-  // r32a,r32b feed r16a; r32c,r32d feed r16b; r16a,r16b feed qf
-  // Returns {html, totalH, qfCY} where qfCY is center-y of QF card for upstream connectors
-  function arm(r32a,r32b,r32c,r32d, r16a,r16b, qf, c16,c8,cqf){
-    const slot=CH+CG;
-    // Col0: 4 R32 cards stacked, gap CG between each, extra gap between pairs
-    const pairGap=CG*3; // gap between the two R32 pairs
-    const col0H=4*CH+2*CG+pairGap;
-    // center-y of each R32 card within col0
-    const cy32=[
-      CH/2,
-      CH+CG+CH/2,
-      CH+CG+pairGap+CH+CH/2,  // wait — need to recalc
-    ];
-    // positions: card0 top=0, card1 top=CH+CG, card2 top=2*(CH+CG)+pairGap-CG, card3 top=card2+(CH+CG)
-    const tops32=[0, CH+CG, 2*(CH+CG)+pairGap, 3*(CH+CG)+pairGap];
-    const cy32_=[tops32[0]+CH/2, tops32[1]+CH/2, tops32[2]+CH/2, tops32[3]+CH/2];
-    const totalH32=tops32[3]+CH;
-
-    // Col1 connector: pair0(cy32_[0],cy32_[1])→r16a; pair1(cy32_[2],cy32_[3])→r16b
-    const r16a_cy=(cy32_[0]+cy32_[1])/2;
-    const r16b_cy=(cy32_[2]+cy32_[3])/2;
-    const totalH_c1=totalH32;
-
-    // Col2: two R16 cards at r16a_cy-CH/2 and r16b_cy-CH/2
-    // Col3 connector: (r16a_cy, r16b_cy) → qf_cy
-    const qf_cy=(r16a_cy+r16b_cy)/2;
-    const totalH_arm=totalH32;
-
-    // Build HTML
-    const col0html=
-      bCard(r32a,c16)+`<div style="height:${CG}px"></div>`+
-      bCard(r32b,c16)+`<div style="height:${pairGap}px"></div>`+
-      bCard(r32c,c16)+`<div style="height:${CG}px"></div>`+
-      bCard(r32d,c16);
-
-    const svg01=conn2to1(cy32_[0],cy32_[1],r16a_cy,totalH_c1)+
-                conn2to1(cy32_[2],cy32_[3],r16b_cy,totalH_c1);
-    // Actually need ONE svg spanning full height with all 4 lines
-    const svg01combined=`<svg width="28" height="${totalH_c1}" style="flex-shrink:0;overflow:visible">
-      <line x1="0" y1="${cy32_[0]}" x2="14" y2="${cy32_[0]}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="0" y1="${cy32_[1]}" x2="14" y2="${cy32_[1]}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="14" y1="${cy32_[0]}" x2="14" y2="${cy32_[1]}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="14" y1="${r16a_cy}" x2="28" y2="${r16a_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="0" y1="${cy32_[2]}" x2="14" y2="${cy32_[2]}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="0" y1="${cy32_[3]}" x2="14" y2="${cy32_[3]}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="14" y1="${cy32_[2]}" x2="14" y2="${cy32_[3]}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="14" y1="${r16b_cy}" x2="28" y2="${r16b_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-    </svg>`;
-
-    const r16a_top=Math.round(r16a_cy-CH/2);
-    const r16b_top=Math.round(r16b_cy-CH/2);
-    const col1html=`<div style="position:relative;height:${totalH_arm}px;width:130px;flex-shrink:0">
-      <div style="position:absolute;top:${r16a_top}px">${bCard(r16a,c8)}</div>
-      <div style="position:absolute;top:${r16b_top}px">${bCard(r16b,c8)}</div>
-    </div>`;
-
-    const svg12=`<svg width="28" height="${totalH_arm}" style="flex-shrink:0;overflow:visible">
-      <line x1="0" y1="${r16a_cy}" x2="14" y2="${r16a_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="0" y1="${r16b_cy}" x2="14" y2="${r16b_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="14" y1="${r16a_cy}" x2="14" y2="${r16b_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="14" y1="${qf_cy}" x2="28" y2="${qf_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-    </svg>`;
-
-    const qf_top=Math.round(qf_cy-CH/2);
-    const col2html=`<div style="position:relative;height:${totalH_arm}px;width:130px;flex-shrink:0">
-      <div style="position:absolute;top:${qf_top}px">${bCard(qf,cqf)}</div>
-    </div>`;
-
-    return {
-      html:`<div style="display:flex;align-items:flex-start;gap:0">
-        <div style="display:flex;flex-direction:column">${col0html}</div>
-        ${svg01combined}
-        ${col1html}
-        ${svg12}
-        ${col2html}
-      </div>`,
-      totalH:totalH_arm,
-      qfCY:qf_cy
-    };
-  }
-
-  /* ── Colors ── */
   const c16="#1d6ed8",c8="#16a34a",cqf="#b45309",csf="#9333ea",cf="#dc2626",c3p="#64748b";
+  const CONN=20, // connector width
+        PAIR_GAP=CG*4, // extra gap between pairs within a quad
+        QUAD_GAP=CG*6; // extra gap between quads
 
-  /* ── 4 arms ── */
-  // Arm1: P73,P75,P74,P77 → P89,P90 → P97
-  // Arm2: P76,P78,P79,P80 → P91,P92 → P98
-  // Arm3: P83,P84,P81,P82 → P93,P94 → P99
-  // Arm4: P86,P88,P85,P87 → P95,P96 → P100
-  const arm1=arm(73,75,74,77, 89,90, 97,  c16,c8,cqf);
-  const arm2=arm(76,78,79,80, 91,92, 98,  c16,c8,cqf);
-  const arm3=arm(83,84,81,82, 93,94, 99,  c16,c8,cqf);
-  const arm4=arm(86,88,85,87, 95,96, 100, c16,c8,cqf);
+  // slot height = CH + CG
+  const SH=CH+CG;
+  // pair height = 2*SH - CG (2 cards + 1 gap)
+  const PH=2*SH-CG; // = 2*CH+CG
+  // quad height = 2 pairs + pair_gap
+  const QH=2*PH+PAIR_GAP+CG; // = 4*CH+3*CG+PAIR_GAP
 
-  /* ── SF: arm1+arm2 → SF1(P101), arm3+arm4 → SF2(P102) ── */
-  // Each arm has totalH and qfCY. Stack arm1 then arm2 with armGap between.
-  const armGap=24;
+  // Center-y of card i in a column (0-indexed), accounting for pair structure
+  function cy32(i){
+    // Cards 0,1 form pair0; cards 2,3 form pair1, separated by PAIR_GAP
+    if(i===0) return CH/2;
+    if(i===1) return SH+CH/2;
+    if(i===2) return SH+CG+PAIR_GAP+CH/2; // wait: pair1 starts at PH+PAIR_GAP+CG
+    if(i===3) return SH+CG+PAIR_GAP+SH+CH/2;
+    return 0;
+  }
+  // Correct: pair0 occupies [0, PH], pair1 starts at PH+CG+PAIR_GAP
+  // card tops: 0=0, 1=SH, 2=PH+CG+PAIR_GAP, 3=PH+CG+PAIR_GAP+SH
+  const ctops=[0, SH, PH+CG+PAIR_GAP, PH+CG+PAIR_GAP+SH];
+  const ccy=ctops.map(t=>t+CH/2);
+  const totalQH=ctops[3]+CH; // total height of a 4-card quad column
 
-  function sfBlock(a1,a2, sfId, qf1id,qf2id, csf){
-    const sf1_cy=a1.qfCY;  // QF1 center relative to a1 top
-    const sf2_cy=a1.totalH+armGap+a2.qfCY; // QF2 center relative to block top
-    const sf_cy=(sf1_cy+sf2_cy)/2;
-    const blockH=a1.totalH+armGap+a2.totalH;
+  // R16 centers (midpoints of each pair)
+  const r16cy=[(ccy[0]+ccy[1])/2, (ccy[2]+ccy[3])/2];
+  // QF center (midpoint of r16 pair)
+  const qfcy=(r16cy[0]+r16cy[1])/2;
+  // SF center: will be computed per half
+  // Final center: midpoint of two SF
 
-    // We need to extract just the QF card from each arm for the SF connector
-    // The arm already rendered the QF inside a position:relative div.
-    // For the SF connector we use the known qfCY values.
-    const svgSF=`<svg width="28" height="${blockH}" style="flex-shrink:0;overflow:visible">
-      <line x1="0" y1="${sf1_cy}" x2="14" y2="${sf1_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="0" y1="${sf2_cy}" x2="14" y2="${sf2_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="14" y1="${sf1_cy}" x2="14" y2="${sf2_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-      <line x1="14" y1="${sf_cy}" x2="28" y2="${sf_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+  // Build one 4-card R32 column HTML (stacked with gaps)
+  function r32col(ids,color){
+    return`<div style="display:flex;flex-direction:column;flex-shrink:0">
+      ${bCard(ids[0],color)}<div style="height:${CG}px"></div>
+      ${bCard(ids[1],color)}<div style="height:${PAIR_GAP+CG}px"></div>
+      ${bCard(ids[2],color)}<div style="height:${CG}px"></div>
+      ${bCard(ids[3],color)}
+    </div>`;
+  }
+
+  // SVG connector: 4 R32 → 2 R16 (one per pair)
+  function svgConn32to16(totalH){
+    return`<svg width="${CONN}" height="${totalH}" style="flex-shrink:0;overflow:visible">
+      <line x1="0" y1="${ccy[0]}" x2="${CONN/2}" y2="${ccy[0]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${ccy[1]}" x2="${CONN/2}" y2="${ccy[1]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${CONN/2}" y1="${ccy[0]}" x2="${CONN/2}" y2="${ccy[1]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${CONN/2}" y1="${r16cy[0]}" x2="${CONN}" y2="${r16cy[0]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${ccy[2]}" x2="${CONN/2}" y2="${ccy[2]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${ccy[3]}" x2="${CONN/2}" y2="${ccy[3]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${CONN/2}" y1="${ccy[2]}" x2="${CONN/2}" y2="${ccy[3]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${CONN/2}" y1="${r16cy[1]}" x2="${CONN}" y2="${r16cy[1]}" stroke="var(--bor)" stroke-width="1.5"/>
+    </svg>`;
+  }
+
+  // R16 column (2 cards positioned at r16cy centers)
+  function r16col(ids,color,totalH){
+    const t0=Math.round(r16cy[0]-CH/2), t1=Math.round(r16cy[1]-CH/2);
+    return`<div style="position:relative;width:${CW}px;height:${totalH}px;flex-shrink:0">
+      <div style="position:absolute;top:${t0}px">${bCard(ids[0],color)}</div>
+      <div style="position:absolute;top:${t1}px">${bCard(ids[1],color)}</div>
+    </div>`;
+  }
+
+  // SVG connector: 2 R16 → 1 QF
+  function svgConn16toQF(totalH){
+    return`<svg width="${CONN}" height="${totalH}" style="flex-shrink:0;overflow:visible">
+      <line x1="0" y1="${r16cy[0]}" x2="${CONN/2}" y2="${r16cy[0]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${r16cy[1]}" x2="${CONN/2}" y2="${r16cy[1]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${CONN/2}" y1="${r16cy[0]}" x2="${CONN/2}" y2="${r16cy[1]}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${CONN/2}" y1="${qfcy}" x2="${CONN}" y2="${qfcy}" stroke="var(--bor)" stroke-width="1.5"/>
+    </svg>`;
+  }
+
+  // QF card positioned at qfcy center
+  function qfCol(id,color,totalH){
+    const t=Math.round(qfcy-CH/2);
+    return`<div style="position:relative;width:${CW}px;height:${totalH}px;flex-shrink:0">
+      <div style="position:absolute;top:${t}px">${bCard(id,color)}</div>
+    </div>`;
+  }
+
+  // Build one "half" = 2 quads stacked → 2 QF → 1 SF
+  // halfIds: {q1r32:[4ids], q1r16:[2ids], q1qf:id, q2r32:[4ids], q2r16:[2ids], q2qf:id, sf:id}
+  function buildHalf(q1r32,q1r16,q1qf, q2r32,q2r16,q2qf, sfId, cqf,csf){
+    const halfH=2*totalQH+QUAD_GAP;
+    // QF positions within half: q1 qfcy, q2 totalQH+QUAD_GAP+qfcy
+    const qf1y=qfcy, qf2y=totalQH+QUAD_GAP+qfcy;
+    const sfy=(qf1y+qf2y)/2;
+
+    // SVG for QF→SF connector (spans full halfH)
+    const svgSF=`<svg width="${CONN}" height="${halfH}" style="flex-shrink:0;overflow:visible">
+      <line x1="0" y1="${qf1y}" x2="${CONN/2}" y2="${qf1y}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="0" y1="${qf2y}" x2="${CONN/2}" y2="${qf2y}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${CONN/2}" y1="${qf1y}" x2="${CONN/2}" y2="${qf2y}" stroke="var(--bor)" stroke-width="1.5"/>
+      <line x1="${CONN/2}" y1="${sfy}" x2="${CONN}" y2="${sfy}" stroke="var(--bor)" stroke-width="1.5"/>
     </svg>`;
 
-    const sfTop=Math.round(sf_cy-CH/2);
-    const sfCol=`<div style="position:relative;height:${blockH}px;width:130px;flex-shrink:0">
+    // SF card
+    const sfTop=Math.round(sfy-CH/2);
+    const sfCard=`<div style="position:relative;width:${CW}px;height:${halfH}px;flex-shrink:0">
       <div style="position:absolute;top:${sfTop}px">${bCard(sfId,csf)}</div>
     </div>`;
 
-    return {
+    // Build each quad as: r32col | conn32to16 | r16col | conn16toQF | qfCol
+    function quad(r32ids,r16ids,qfId){
+      return`<div style="display:flex;align-items:flex-start;gap:0">
+        ${r32col(r32ids,c16)}
+        ${svgConn32to16(totalQH)}
+        ${r16col(r16ids,c8,totalQH)}
+        ${svgConn16toQF(totalQH)}
+        ${qfCol(qfId,cqf,totalQH)}
+      </div>`;
+    }
+
+    const q1html=quad(q1r32,q1r16,q1qf);
+    const q2html=quad(q2r32,q2r16,q2qf);
+
+    // Stack the two quads + connector + SF
+    return{
       html:`<div style="display:flex;align-items:flex-start;gap:0">
-        <div style="display:flex;flex-direction:column">
-          ${a1.html}
-          <div style="height:${armGap}px"></div>
-          ${a2.html}
+        <div style="display:flex;flex-direction:column;flex-shrink:0">
+          ${q1html}
+          <div style="height:${QUAD_GAP}px"></div>
+          ${q2html}
         </div>
         ${svgSF}
-        ${sfCol}
+        ${sfCard}
       </div>`,
-      blockH,
-      sfCY:sf_cy
+      halfH,
+      sfy
     };
   }
 
-  const top=sfBlock(arm1,arm2, 101, 97,98, csf);
-  const bot=sfBlock(arm3,arm4, 102, 99,100,csf);
+  // LEFT half (bracket image: left side reads top-to-bottom outward→inward)
+  // P74,P77 → P89 ] quad1
+  // P73,P75 → P90 ]
+  // P83,P84 → P93 ] quad2  → P97,P98 → P101
+  // P81,P82 → P94 ]
+  const left=buildHalf(
+    [74,77,73,75],[89,90],97,
+    [83,84,81,82],[93,94],98,
+    101, cqf,csf
+  );
 
-  /* ── Final + 3rd: top.SF + bot.SF → Final ── */
-  const halfGap=32;
-  const final_sf1_cy=top.sfCY;
-  const final_sf2_cy=top.blockH+halfGap+bot.sfCY;
-  const final_cy=(final_sf1_cy+final_sf2_cy)/2;
-  const fullH=top.blockH+halfGap+bot.blockH;
+  // RIGHT half (right side reads top-to-bottom outward→inward)
+  // P76,P78 → P91 ] quad3
+  // P79,P80 → P92 ]
+  // P86,P88 → P95 ] quad4  → P99,P100 → P102
+  // P85,P87 → P96 ]
+  const right=buildHalf(
+    [76,78,79,80],[91,92],99,
+    [86,88,85,87],[95,96],100,
+    102, cqf,csf
+  );
 
-  const svgFinal=`<svg width="28" height="${fullH}" style="flex-shrink:0;overflow:visible">
-    <line x1="0" y1="${final_sf1_cy}" x2="14" y2="${final_sf1_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-    <line x1="0" y1="${final_sf2_cy}" x2="14" y2="${final_sf2_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-    <line x1="14" y1="${final_sf1_cy}" x2="14" y2="${final_sf2_cy}" stroke="var(--bor)" stroke-width="1.5"/>
-    <line x1="14" y1="${final_cy}" x2="28" y2="${final_cy}" stroke="var(--bor)" stroke-width="1.5"/>
+  // Final: connect SF left (left.sfy) and SF right (right.sfy)
+  const totalBracketH=Math.max(left.halfH,right.halfH);
+  const finalY=totalBracketH/2;
+  const finalTop=Math.round(finalY-CH/2);
+  const thirdTop=Math.round(finalY+CH/2+16);
+
+  const svgFinal=`<svg width="${CONN}" height="${totalBracketH}" style="flex-shrink:0;overflow:visible">
+    <line x1="0" y1="${left.sfy}" x2="${CONN/2}" y2="${left.sfy}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="0" y1="${right.sfy}" x2="${CONN/2}" y2="${right.sfy}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="${CONN/2}" y1="${left.sfy}" x2="${CONN/2}" y2="${right.sfy}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="${CONN/2}" y1="${finalY}" x2="${CONN}" y2="${finalY}" stroke="var(--bor)" stroke-width="1.5"/>
   </svg>`;
 
-  const finalTop=Math.round(final_cy-CH/2);
-  const thirdTop=Math.round(final_cy+CH/2+20);
-  const finalCol=`<div style="position:relative;height:${fullH}px;width:140px;flex-shrink:0">
+  const finalCol=`<div style="position:relative;width:${CW+16}px;height:${totalBracketH}px;flex-shrink:0">
     <div style="position:absolute;top:${finalTop}px">
-      <div style="font-size:8px;font-weight:700;color:${cf};letter-spacing:.4px;margin-bottom:4px">🏆 FINAL</div>
+      <div style="font-size:8px;font-weight:700;color:${cf};margin-bottom:4px">🏆 FINAL</div>
       ${bCard(104,cf)}
     </div>
     <div style="position:absolute;top:${thirdTop}px">
-      <div style="font-size:8px;font-weight:700;color:${c3p};letter-spacing:.4px;margin-bottom:4px">🥉 3ER PUESTO</div>
+      <div style="font-size:8px;font-weight:700;color:${c3p};margin-bottom:4px">🥉 3ER PUESTO</div>
       ${bCard(103,c3p)}
     </div>
   </div>`;
 
-  /* ── Tab panels ── */
-  const c16h="#1d6ed8",c8h="#16a34a",cqfh="#b45309",csfh="#9333ea",cfh="#dc2626";
-
-  // Grid panel for list views
+  // ── Tab panels ──
   function gridPanel(ids,color,label){
-    return `<div style="font-size:9px;font-weight:700;color:${color};letter-spacing:.6px;margin-bottom:10px;text-transform:uppercase">${label}</div>
+    return`<div style="font-size:9px;font-weight:700;color:${color};letter-spacing:.6px;margin-bottom:10px;text-transform:uppercase">${label}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${ids.map(id=>bCard(id,color)).join("")}</div>`;
   }
 
+  const bracketHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px">
+    <div style="display:inline-flex;align-items:flex-start;gap:0;padding:4px 2px">
+      ${left.html}
+      ${svgFinal}
+      ${finalCol}
+      ${svgFinal.replace(`x1="${CONN/2}" y1="${left.sfy}"`,`x1="${CONN/2}" y1="${right.sfy}"`).replace(`x1="${CONN/2}" y1="${right.sfy}"`,`x1="${CONN/2}" y1="${left.sfy}"`)}
+      ${right.html}
+    </div>
+  </div>`;
+
+  // Actually build final+right properly:
+  const svgFinalR=`<svg width="${CONN}" height="${totalBracketH}" style="flex-shrink:0;overflow:visible">
+    <line x1="0" y1="${finalY}" x2="${CONN/2}" y2="${finalY}" stroke="var(--bor)" stroke-width="1.5"/>
+    <line x1="${CONN/2}" y1="${right.sfy}" x2="${CONN}" y2="${right.sfy}" stroke="var(--bor)" stroke-width="1.5"/>
+  </svg>`;
+
+  const bracketFull=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px">
+    <div style="display:inline-flex;align-items:flex-start;gap:0;padding:4px 2px">
+      ${left.html}
+      ${svgFinal}
+      ${finalCol}
+      ${right.html}
+    </div>
+  </div>`;
+
   const panels=[
-    // 0: Bracket (full horizontal scroll)
-    `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px">
-      <div style="display:inline-flex;align-items:flex-start;gap:0;padding:4px 2px">
-        <div style="display:flex;flex-direction:column">
-          ${top.html}
-          <div style="height:${halfGap}px"></div>
-          ${bot.html}
-        </div>
-        ${svgFinal}
-        ${finalCol}
-      </div>
-    </div>`,
-    // 1: 16avos list
-    gridPanel([73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88],c16h,"16avos de final"),
-    // 2: Octavos
-    gridPanel([89,90,91,92,93,94,95,96],c8h,"Octavos de final"),
-    // 3: Cuartos
-    gridPanel([97,98,99,100],cqfh,"Cuartos de final"),
-    // 4: Semis
-    gridPanel([101,102],csfh,"Semifinales"),
-    // 5: Final + 3er
-    `<div style="font-size:9px;font-weight:700;color:${cfh};letter-spacing:.6px;margin-bottom:8px;text-transform:uppercase">Final</div>
-     <div style="margin-bottom:16px">${bCard(104,cfh)}</div>
+    bracketFull,
+    gridPanel([73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88],c16,"16avos de final"),
+    gridPanel([89,90,91,92,93,94,95,96],c8,"Octavos de final"),
+    gridPanel([97,98,99,100],cqf,"Cuartos de final"),
+    gridPanel([101,102],csf,"Semifinales"),
+    `<div style="font-size:9px;font-weight:700;color:${cf};letter-spacing:.6px;margin-bottom:8px;text-transform:uppercase">Final</div>
+     <div style="margin-bottom:16px">${bCard(104,cf)}</div>
      <div style="font-size:9px;font-weight:700;color:${c3p};letter-spacing:.6px;margin-bottom:8px;text-transform:uppercase">🥉 Tercer puesto</div>
      ${bCard(103,c3p)}`,
   ];
 
-  const TABS=[
-    {label:"🏆 Bracket"},
-    {label:"16avos"},
-    {label:"Octavos"},
-    {label:"Cuartos"},
-    {label:"Semis"},
-    {label:"Final"},
-  ];
-
+  const TABS=["🏆 Bracket","16avos","Octavos","Cuartos","Semis","Final"];
   const tabsHTML=TABS.map((t,i)=>
-    `<button id="ctab-${i}" onclick="switchCrucesTab(${i})" style="padding:6px 12px;border-radius:20px;border:1.5px solid ${i===0?"var(--bm)":"var(--bor)"};background:${i===0?"var(--bl)":"var(--card)"};color:${i===0?"var(--bd)":"var(--t2)"};font-size:11px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s">${t.label}</button>`
+    `<button id="ctab-${i}" onclick="switchCrucesTab(${i})" style="padding:6px 12px;border-radius:20px;border:1.5px solid ${i===0?"var(--bm)":"var(--bor)"};background:${i===0?"var(--bl)":"var(--card)"};color:${i===0?"var(--bd)":"var(--t2)"};font-size:11px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s">${t}</button>`
   ).join("");
 
   const panelsHTML=panels.map((p,i)=>
@@ -2364,7 +2407,7 @@ window.switchCrucesTab=function(idx){
   for(let i=0;i<6;i++){
     const tab=document.getElementById("ctab-"+i);
     const panel=document.getElementById("cpanel-"+i);
-    if(!tab||!panel) continue;
+    if(!tab||!panel)continue;
     const active=i===idx;
     tab.style.background=active?"var(--bl)":"var(--card)";
     tab.style.borderColor=active?"var(--bm)":"var(--bor)";
