@@ -2099,7 +2099,9 @@ function buildCruces(){
       }
       return{name:slot,flag:"🏳️"};
     }
-    return{name:slot,flag:"🏳️"};
+    // Nombre de equipo directo — buscar bandera en TEAM_FLAGS
+    const directFlag = getTeamFlag(slot);
+    return{name:slot,flag:directFlag||"🏳️"};
   }
 
   function getFIFAThird(g8){
@@ -3944,9 +3946,9 @@ function renderMultiPollaPanel(pollaData){
           <button class="mp-sbtn" onclick="mpAdjShared(${m.id},'a',1)">+</button>
         </div>
       </div>
-      <div class="mp-extra-q">${m.q}</div>
+      <div class="mp-extra-q">${m.q.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)}</div>
       <div class="mp-extra-opts" id="mp-opts-${m.id}" style="margin-top:4px;margin-bottom:8px">
-        ${m.opts.map(o=>`<button class="obtn${s.extra===o?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${o.replace(/'/g,"\'")}',this)">${o}</button>`).join('')}
+        ${m.opts.map(o=>{const ol=o.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away);return`<button class="obtn${s.extra===o?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${o.replace(/'/g,"'")}',this)">${ol}</button>`;}).join('')}
       </div>
       <div style="background:var(--bg);border-radius:var(--rs);padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--t2)">
         Se aplica a: <strong>${pollaNames.join(' · ')}</strong>
