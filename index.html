@@ -1482,6 +1482,27 @@ function resolveKnockoutSlot(slot){
     }
     return{name:slot,flag:null};
   }
+  // Resolve Gan.PXX (winner) and Per.PXX (loser) from a previous match result
+  const mGan=slot.match(/^Gan\.P(\d+)$/);
+  if(mGan){
+    const mid=parseInt(mGan[1]),r=results[mid];
+    if(r?.locked&&r.h!=null&&r.a!=null){
+      const homeWon=r.h>r.a,awayWon=r.a>r.h;
+      const winner=homeWon?r.homeTeam:awayWon?r.awayTeam:null;
+      if(winner)return{name:winner,flag:getTeamFlag(winner)||null};
+    }
+    return{name:slot,flag:null};
+  }
+  const mPer=slot.match(/^Per\.P(\d+)$/);
+  if(mPer){
+    const mid=parseInt(mPer[1]),r=results[mid];
+    if(r?.locked&&r.h!=null&&r.a!=null){
+      const homeWon=r.h>r.a,awayWon=r.a>r.h;
+      const loser=homeWon?r.awayTeam:awayWon?r.homeTeam:null;
+      if(loser)return{name:loser,flag:getTeamFlag(loser)||null};
+    }
+    return{name:slot,flag:null};
+  }
   return{name:slot,flag:null};
 }
 
@@ -2058,6 +2079,24 @@ function buildCruces(){
       if(g8.length===8){const a=getFIFAThird(g8);if(a[slot]){const t=standings[a[slot]]?.[2];if(t?.pj>0)return{name:t.n,flag:t.f};}}
       return{name:slot,flag:"🏳️"};
     }
+    const mGan=slot.match(/^Gan\.P(\d+)$/);
+    if(mGan){
+      const mid=parseInt(mGan[1]),r=results[mid];
+      if(r?.locked&&r.h!=null&&r.a!=null){
+        const winner=r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null;
+        if(winner)return{name:winner,flag:getTeamFlag(winner)||"🏳️"};
+      }
+      return{name:slot,flag:"🏳️"};
+    }
+    const mPer=slot.match(/^Per\.P(\d+)$/);
+    if(mPer){
+      const mid=parseInt(mPer[1]),r=results[mid];
+      if(r?.locked&&r.h!=null&&r.a!=null){
+        const loser=r.h>r.a?r.awayTeam:r.a>r.h?r.homeTeam:null;
+        if(loser)return{name:loser,flag:getTeamFlag(loser)||"🏳️"};
+      }
+      return{name:slot,flag:"🏳️"};
+    }
     return{name:slot,flag:"🏳️"};
   }
 
@@ -2113,8 +2152,7 @@ function buildCruces(){
       if(rn&&!rn.includes("TBD")&&!rn.match(/^[12]°/)&&!rn.match(/^3°/)&&!rn.includes("Gan.")&&!rn.includes("Per."))
         return{name:rn,flag:getTeamFlag(rn)||"🏳️"};}
     const raw=side==="home"?m.home:m.away;
-    if(m.ph==="16avos")return resolveSlot(raw);
-    return{name:raw,flag:"🏳️"};
+    return resolveSlot(raw);
   }
 
   // ── Card ──
@@ -2374,8 +2412,11 @@ function buildCruces(){
   const _sfTopCY = left.sfy;           // SF top center-y within stacked block
   const _sfBotCY = left.halfH + right.sfy; // SF bottom center-y
   const _finalCY = (_sfTopCY + _sfBotCY) / 2;
-  const _finalTop = Math.round(_finalCY - CH/2);
-  const _thirdTop = _finalTop + CH + 12;
+  // Final card is taller (CH+20) to stand out more
+  const CF_H = CH + 20;
+  const _finalTop = Math.round(_finalCY - CF_H/2);
+  // Extra gap between Final and 3er Puesto
+  const _thirdTop = _finalTop + CF_H + 36;
   const CONNW = 28;
 
   const _svgConn = `<svg width="${CONNW}" height="${_totalH}" style="flex-shrink:0;overflow:visible;align-self:flex-start">
@@ -2385,10 +2426,33 @@ function buildCruces(){
     <line x1="${CONNW/2}" y1="${_finalCY}" x2="${CONNW}" y2="${_finalCY}" stroke="var(--bor)" stroke-width="1.5"/>
   </svg>`;
 
-  const _finalCol = `<div style="position:relative;width:${CW+20}px;height:${_totalH}px;flex-shrink:0">
+  function bCardFinal(mid,color){
+    const m=MATCHES.find(x=>x.id===mid);if(!m)return`<div style="width:${CW+16}px;height:${CF_H}px"></div>`;
+    const h=slotInfo(mid,"home"),a=slotInfo(mid,"away");
+    const r=results[mid],lk=!!r?.locked,lv=!!r?.live;
+    const lt=m.aTime&&m.aTime!=="s/h"?toLocal(m.aDate,m.aTime).time:"";
+    const ld=m.aDate?toLocal(m.aDate,m.aTime||"00:00").date:"";
+    const sh=r?.h??null,sa=r?.a??null;
+    const hw=lk&&sh!==null&&sh>sa,aw=lk&&sa!==null&&sa>sh;
+    return`<div style="background:var(--card);border:2px solid ${lv?"var(--gm)":color};border-radius:9px;padding:7px 10px;width:${CW+16}px;height:${CF_H}px;box-sizing:border-box;box-shadow:0 2px 10px rgba(0,0,0,.18);flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:3px;margin-bottom:4px">
+        <span style="font-size:15px;line-height:1;flex-shrink:0">${h.flag||"🏳️"}</span>
+        <span style="flex:1;font-size:11px;font-weight:${hw?700:600};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name}</span>
+        ${sh!==null?`<span style="font-size:14px;font-weight:800;color:${lv?"var(--gm)":hw?"var(--bm)":"var(--t2)"};font-family:'Barlow Condensed',sans-serif;flex-shrink:0">${sh}</span>`:""}
+      </div>
+      ${lk||lv?`<div style="font-size:9px;color:${lv?"var(--gm)":"var(--t2)"};text-align:center;margin:2px 0">${lv?"🟢 EN VIVO":ld+" · "+lt}</div>`:`<div style="font-size:9px;color:var(--t2);text-align:center;margin:2px 0">${ld?ld+" · "+lt:""}</div>`}
+      <div style="display:flex;align-items:center;gap:3px;margin-top:4px">
+        <span style="font-size:15px;line-height:1;flex-shrink:0">${a.flag||"🏳️"}</span>
+        <span style="flex:1;font-size:11px;font-weight:${aw?700:600};color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
+        ${sa!==null?`<span style="font-size:14px;font-weight:800;color:${lv?"var(--gm)":aw?"var(--bm)":"var(--t2)"};font-family:'Barlow Condensed',sans-serif;flex-shrink:0">${sa}</span>`:""}
+      </div>
+    </div>`;
+  }
+
+  const _finalCol = `<div style="position:relative;width:${CW+36}px;height:${_totalH}px;flex-shrink:0">
     <div style="position:absolute;top:${_finalTop}px">
-      <div style="font-size:8px;font-weight:700;color:${cf};letter-spacing:.4px;margin-bottom:4px">🏆 FINAL</div>
-      ${bCard(104,cf)}
+      <div style="font-size:9px;font-weight:800;color:${cf};letter-spacing:.5px;margin-bottom:5px">🏆 FINAL</div>
+      ${bCardFinal(104,cf)}
     </div>
     <div style="position:absolute;top:${_thirdTop}px">
       <div style="font-size:8px;font-weight:700;color:${c3p};letter-spacing:.4px;margin-bottom:4px">🥉 3ER PUESTO</div>
@@ -2396,10 +2460,13 @@ function buildCruces(){
     </div>
   </div>`;
 
+  const HALF_GAP = 20;
   const bracketFull=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px">
     <div style="display:inline-flex;align-items:flex-start;padding:2px 4px">
       <div style="display:flex;flex-direction:column">
         <div>${left.html}</div>
+        <div style="height:${HALF_GAP}px;border-bottom:1.5px dashed var(--bor);margin:0 4px;opacity:.5"></div>
+        <div style="height:${HALF_GAP}px"></div>
         <div>${right.html}</div>
       </div>
       ${_svgConn}
@@ -2787,12 +2854,15 @@ async function fetchLive(){
         if(!cur?.locked){
           // Try to auto-answer the extra question
           const qr = await autoAnswerQuestion(ev.id, mid);
+          // Preserve any qr already set manually during the match — don't overwrite
+          const existingQr = pollaLive.results?.[mid]?.qr;
+          const finalQr = existingQr || qr || null;
           updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
             h, a, live:false, locked:true,
             homeTeam:homeName, awayTeam:awayName, espnId:ev.id,
-            ...(qr ? {qr} : {})
+            ...(finalQr ? {qr: finalQr} : {})
           };
-          finishedWithQr.push({mid, h, a, qr});
+          finishedWithQr.push({mid, h, a, qr: finalQr});
         }
       }
     }
@@ -3208,20 +3278,74 @@ window.adminSaveQr = async function(btn){
   if(!freshR.exists()){ alert("No hay resultado guardado para este partido."); return; }
   const r = freshR.val();
   if(!r.locked){ alert("El partido no está cerrado todavía."); return; }
-  if(!confirm(`¿Guardar respuesta "${adminExtra}" para ${m.home} vs ${m.away} y calcular puntos?\nMarcador: ${r.h}-${r.a}`)) return;
+  if(!confirm(`¿Guardar respuesta "${adminExtra}" para ${m.home} vs ${m.away} y recalcular puntos?\nMarcador: ${r.h}-${r.a}\n\n⚠️ Se recalcularán todos los partidos desde cero para evitar duplicados.`)) return;
   btn.textContent="Guardando..."; btn.disabled=true;
   try{
-    // Save qr and reset ptsAwarded so calcPoints runs
+    // 1. Save qr first and clear ptsAwarded flag for this match
     await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
       qr: adminExtra,
       ptsAwarded: false
     });
-    // Now calculate points with confirmed fresh result
-    console.log(`[adminSaveQr] calcPoints mid=${mid} h=${r.h} a=${r.a} qr=${adminExtra}`);
-    await calcPoints(mid, r.h||0, r.a||0, adminExtra);
-    // Save scorer checkpoint
+    // 2. Full recalc from scratch to avoid duplicating marcador points
+    //    (calcPoints accumulates on top of existing pts — safe only if ptsAwarded was never set)
+    btn.textContent="Recalculando...";
+    const [membersSnap, resultsSnap] = await Promise.all([
+      get(ref(db,`pollas/${CUR.pollaId}/members`)),
+      get(ref(db,`pollas/${CUR.pollaId}/results`))
+    ]);
+    if(!membersSnap.exists()){ btn.textContent="Sin miembros"; btn.disabled=false; return; }
+    const members = membersSnap.val();
+    const results = resultsSnap.exists() ? resultsSnap.val() : {};
+    // Finalized = locked + has qr
+    const finalized = MATCHES.filter(x => results[x.id]?.locked && results[x.id]?.qr);
+    const updates = {};
+    const snapshotSnap = await get(ref(db,`pollas/${CUR.pollaId}/pointsSnapshot`));
+    const snapshot = snapshotSnap.exists() ? snapshotSnap.val() : null;
+    const newSystemMatches = finalized.filter(x=>x.id>=NEW_SYSTEM_FROM_MATCH);
+    const allPicksPerMatch = {};
+    newSystemMatches.forEach(match=>{
+      allPicksPerMatch[match.id] = Object.values(members).map(mem=>mem.picks?.[match.id]).filter(p=>p&&p.h!=null);
+    });
+    Object.entries(members).forEach(([uid, mem])=>{
+      const base = snapshot?.[uid] || {pts:0,ok:0,ex:0};
+      let totalPts=base.pts, totalOk=base.ok, totalEx=base.ex;
+      const ptsPerMatch={}, okPerMatch={}, exPerMatch={}, qPtsPerMatch={};
+      finalized.filter(x=>x.id<NEW_SYSTEM_FROM_MATCH).forEach(match=>{
+        ptsPerMatch[match.id]  = mem.ptsPerMatch?.[match.id]||0;
+        okPerMatch[match.id]   = mem.okPerMatch?.[match.id]||0;
+        exPerMatch[match.id]   = mem.exPerMatch?.[match.id]||0;
+        qPtsPerMatch[match.id] = mem.qPtsPerMatch?.[match.id]||0;
+      });
+      newSystemMatches.forEach(match=>{
+        const res = results[match.id];
+        const rp = PTS_NEW[match.r]||PTS_NEW.g;
+        let p = mem.picks?.[match.id];
+        if(!p||p.h==null){
+          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+          p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
+        }
+        const {pts,ok,ex,qOk}=calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
+        totalPts+=pts; totalOk+=ok; totalEx+=ex;
+        ptsPerMatch[match.id]  = pts;
+        okPerMatch[match.id]   = ok;
+        exPerMatch[match.id]   = ex;
+        qPtsPerMatch[match.id] = qOk;
+      });
+      const globalPts = mem.globalPtsAwarded ? (mem.globalPts||0) : 0;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/pts`]          = totalPts + globalPts;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]           = totalOk;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]           = totalEx;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ptsPerMatch`]  = ptsPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/okPerMatch`]   = okPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/exPerMatch`]   = exPerMatch;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/qPtsPerMatch`] = qPtsPerMatch;
+    });
+    finalized.forEach(match=>{
+      updates[`pollas/${CUR.pollaId}/results/${match.id}/ptsAwarded`] = true;
+    });
+    await update(ref(db,"/"), updates);
     setTimeout(()=>{ checkpointScorers(); fetchScorers(); }, 2000);
-    btn.textContent="✅ Guardado y puntos calculados";
+    btn.textContent="✅ Guardado y puntos recalculados";
     setTimeout(()=>{ btn.textContent="💾 Guardar respuesta"; btn.disabled=false; buildAdminMatchSelector(); },2500);
   }catch(e){ btn.textContent="⚠️ Error: "+e.message; btn.disabled=false; }
 };
