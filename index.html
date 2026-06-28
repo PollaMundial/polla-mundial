@@ -1717,7 +1717,7 @@ function calcLiveBonus(){
       let p=mem.picks?.[m.id];
       if(!p||(!p.h&&!p.a&&!p.extra)){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-        p={h:seed%4, a:(seed*7+3)%4, extra:m.opts[(seed*13)%m.opts.length]};
+        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
       }
       const {pts, cat} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allPicks);
       bonus[uid]=(bonus[uid]||0)+pts;
@@ -1745,10 +1745,10 @@ function renderLive(){
       let p=mem.picks?.[m.id];
       if(!p||(!p.h&&!p.a&&!p.extra)){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-        p={h:seed%4,a:(seed*7+3)%4,extra:m.opts[(seed*13)%m.opts.length]};
+        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
       }
       const {pts} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allMemberPicks);
-      return{n:mem.dname||"?",s:`${p.h}-${p.a}`,p:p.extra||"—",me:uid===CUR.uid,pts};
+      return{n:mem.dname||"?",s:`${p.h}-${p.a}`,p:p.extra||"—",me:uid===CUR.uid,pts,isRandom:!!p.isRandom};
     }).filter(Boolean).sort((a,b)=>b.me-a.me);
     const oh=picks.map(o=>{
       const ptsBg=o.pts>0?"background:var(--gl);color:var(--gd)":"background:#f1f1f1;color:var(--t3)";
@@ -1812,7 +1812,7 @@ function renderMyPicks(){
       let p=mem.picks?.[m.id];
       if(!p||p.h==null){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-        p={h:seed%4,a:(seed*7+3)%4,extra:m.opts[(seed*13)%m.opts.length]};
+        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
       }
       resolvedPicksMap[uid]=p;
     });
@@ -3237,7 +3237,7 @@ async function calcPoints(matchId,rh,ra,qr){
     let p=mem.picks?.[matchId];
     if(!p||p.h==null){
       const seed=(uid+String(matchId)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-      p={h:seed%4,a:(seed*7+3)%4,extra:m.opts[(seed*13)%m.opts.length]};
+      p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
       updates[`pollas/${CUR.pollaId}/members/${uid}/picks/${matchId}`]=p;
     }
     resolvedPicks[uid]=p;
@@ -3342,7 +3342,7 @@ window.adminSaveQr = async function(btn){
         let p = mem.picks?.[match.id];
         if(!p||p.h==null){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-          p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
+          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
         const {pts,ok,ex,qOk}=calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
@@ -3423,7 +3423,7 @@ window.adminRecalcMatch = async function(btn){
         let p = mem.picks?.[match.id];
         if(!p||p.h==null){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-          p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
+          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
         const {pts,ok,ex,qOk} = calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex; totalQ+=qOk;
@@ -3948,7 +3948,7 @@ function renderMultiPollaPanel(pollaData){
       </div>
       <div class="mp-extra-q">${m.q.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)}</div>
       <div class="mp-extra-opts" id="mp-opts-${m.id}" style="margin-top:4px;margin-bottom:8px">
-        ${m.opts.map(o=>{const ol=o.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away);return`<button class="obtn${s.extra===o?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${o.replace(/'/g,"'")}',this)">${ol}</button>`;}).join('')}
+        ${m.opts.map(o=>{const ol=o.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away);return`<button class="obtn${s.extra===ol?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${ol.replace(/'/g,"'")}',this)">${ol}</button>`;}).join('')}
       </div>
       <div style="background:var(--bg);border-radius:var(--rs);padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--t2)">
         Se aplica a: <strong>${pollaNames.join(' · ')}</strong>
@@ -4016,14 +4016,15 @@ Pregunta extra: ${s.extra}`)) return;
       ]);
       if(memSnap.exists() && !resSnap.val()?.ptsAwarded){
         const members = memSnap.val();
-        const rp = PTS[m?.r||'g']||PTS_DEF.g;
+        const isNew = mid >= NEW_SYSTEM_FROM_MATCH;
+        const rp = isNew ? (PTS_NEW[m?.r||'g']||PTS_NEW.g) : (PTS[m?.r||'g']||PTS_DEF.g);
         const updates = {};
         Object.entries(members).forEach(([uid,mem])=>{
           let pick = mem.picks?.[mid];
           if(!pick||(!pick.h&&!pick.a&&!pick.extra)){
             const seed=(uid+String(mid)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
             const matchObj=MATCHES.find(x=>x.id===mid);
-            pick={h:seed%4, a:(seed*7+3)%4, extra:matchObj?.opts[(seed*13)%(matchObj?.opts?.length||2)]};
+            pick={h:seed%4,a:(seed*7+3)%4,extra:(matchObj?.opts[(seed*13)%(matchObj?.opts?.length||2)]||"").replace(/__HOME__/g,matchObj?.home||"").replace(/__AWAY__/g,matchObj?.away||""),isRandom:true};
             updates[`pollas/${p.pollaId}/members/${uid}/picks/${mid}`]=pick;
           }
           const exact=pick.h===s.h&&pick.a===s.a;
@@ -4129,7 +4130,7 @@ window.adminRecalcOld = async function(btn){
         let p=mem.picks?.[match.id];
         if(!p||p.h==null){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-          p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
+          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
         const exact=p.h===res.h&&p.a===res.a;
         const winOk=(p.h>p.a&&res.h>res.a)||(p.h<p.a&&res.h<res.a)||(p.h===p.a&&res.h===res.a);
@@ -4190,7 +4191,7 @@ window.adminRecalcNew = async function(btn){
         let p=mem.picks?.[match.id];
         if(!p||p.h==null){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-          p={h:seed%4,a:(seed*7+3)%4,extra:match.opts[(seed*13)%match.opts.length]};
+          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
         const {pts,ok,ex,qOk}=calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
