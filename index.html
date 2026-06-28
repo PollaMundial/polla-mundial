@@ -1718,8 +1718,11 @@ function calcLiveBonus(){
       if(!p||(!p.h&&!p.a&&!p.extra)){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
         p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
+      } else if(p.extra){
+        p={...p,extra:p.extra.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)};
       }
-      const {pts, cat} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allPicks);
+      const resolvedQr=(r.qr||null)?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):null;
+      const {pts, cat} = calcMatchPts(p, r.h, r.a, resolvedQr, rp, isNew, allPicks);
       bonus[uid]=(bonus[uid]||0)+pts;
       const catRank={exact:3,diff:2,win:1,none:0};
       if(!bonusCat[uid]||catRank[cat]>catRank[bonusCat[uid]]) bonusCat[uid]=cat;
@@ -1746,8 +1749,12 @@ function renderLive(){
       if(!p||(!p.h&&!p.a&&!p.extra)){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
         p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
+      } else if(p.extra){
+        // Resolve any __HOME__/__AWAY__ stored in Firebase from before the fix
+        p={...p,extra:p.extra.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)};
       }
-      const {pts} = calcMatchPts(p, r.h, r.a, r.qr||null, rp, isNew, allMemberPicks);
+      const resolvedQr = (r.qr||null) ? (r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away) : null;
+      const {pts} = calcMatchPts(p, r.h, r.a, resolvedQr, rp, isNew, allMemberPicks);
       return{n:mem.dname||"?",s:`${p.h}-${p.a}`,p:p.extra||"—",me:uid===CUR.uid,pts,isRandom:!!p.isRandom};
     }).filter(Boolean).sort((a,b)=>b.me-a.me);
     const oh=picks.map(o=>{
