@@ -1439,8 +1439,8 @@ function renderMatches(){
   const results=pollaLive.results||{};
   let list=MATCHES;
   if(curFilter!=="Todos") list=MATCHES.filter(m=>m.ph===curFilter);
-  // Grupos locked → hidden (go to Resultados). Knockout locked → keep visible (show result)
-  list = list.filter(m=>!(results[m.id]?.locked && m.ph==="Grupos"));
+  // Locked matches → hidden (go to Mis picks)
+  list = list.filter(m=>!results[m.id]?.locked);
   // Sort by date and time
   list = [...list].sort((a,b)=>new Date(a.aDate+" "+a.aTime)-new Date(b.aDate+" "+b.aTime));
   let lastPh="",lastGr="";
@@ -1734,7 +1734,7 @@ function calcLiveBonus(){
 // ── LIVE ──
 function renderLive(){
   const results=pollaLive.results||{};
-  const live=MATCHES.filter(m=>results[m.id]?.live);
+  const live=MATCHES.filter(m=>results[m.id]?.live && !results[m.id]?.locked);
   const emptyEl=document.getElementById("live-empty");
   const liveEl=document.getElementById("live-matches");
   if(!live.length){ emptyEl.style.display=""; liveEl.innerHTML=""; return; }
@@ -1830,7 +1830,7 @@ function renderMyPicks(){
       const {pts,ok,ex,qOk,cat}=calcMatchPts(p,r.h,r.a,r.qr?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):null,rp,isNew,allResolvedPicks);
       const exact=p.h===r.h&&p.a===r.a;
       const winOk=(p.h>p.a&&r.h>r.a)||(p.h<p.a&&r.h<r.a)||(p.h===p.a&&r.h===r.a);
-      return{n:mem.dname||"?",p,pts,exact,winOk,qOk,cat,me:uid===CUR.uid};
+      return{n:mem.dname||"?",p,pts:pts||0,exact,winOk,qOk,cat,me:uid===CUR.uid};
     }).sort((a,b)=>b.pts-a.pts||(b.me?1:-1)-(a.me?1:-1));
     const myEntry=allPicks.find(x=>x.me);
     const myPts=myEntry?.pts||0;
