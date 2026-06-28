@@ -1441,6 +1441,8 @@ function renderMatches(){
   if(curFilter!=="Todos") list=MATCHES.filter(m=>m.ph===curFilter);
   // Grupos locked → hidden (go to Resultados). Knockout locked → keep visible (show result)
   list = list.filter(m=>!(results[m.id]?.locked && m.ph==="Grupos"));
+  // Sort by date and time
+  list = [...list].sort((a,b)=>new Date(a.aDate+" "+a.aTime)-new Date(b.aDate+" "+b.aTime));
   let lastPh="",lastGr="";
   list.forEach(m=>{
     if(m.ph!==lastPh){ lastPh=m.ph; lastGr="";
@@ -2531,7 +2533,23 @@ const TEAM_FLAGS = {
   "Algeria":"🇩🇿","Tunisia":"🇹🇳","Mali":"🇲🇱","Burkina Faso":"🇧🇫","Guinea":"🇬🇳",
   "Iraq":"🇮🇶","UAE":"🇦🇪","Oman":"🇴🇲","Jordan":"🇯🇴","New Zealand":"🇳🇿",
   "Indonesia":"🇮🇩","Thailand":"🇹🇭","China":"🇨🇳","India":"🇮🇳","Curacao":"🇨🇼","Curaçao":"🇨🇼","Trinidad and Tobago":"🇹🇹","Haiti":"🇭🇹","Guadeloupe":"🇬🇵","Suriname":"🇸🇷","Guatemala":"🇬🇹","Nicaragua":"🇳🇮","Belize":"🇧🇿",
-  "DR Congo":"🇨🇩","Zambia":"🇿🇲","Zimbabwe":"🇿🇼","Kenya":"🇰🇪",
+  "DR Congo":"🇨🇩","Zambia":"🇿🇲","Zimbabwe":"🇿🇼","Kenya":"🇰🇿",
+  // Nombres en español
+  "México":"🇲🇽","Estados Unidos":"🇺🇸","EEUU":"🇺🇸","Canadá":"🇨🇦","Argentina":"🇦🇷","Brasil":"🇧🇷",
+  "Francia":"🇫🇷","Alemania":"🇩🇪","España":"🇪🇸","Portugal":"🇵🇹","Inglaterra":"🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  "Países Bajos":"🇳🇱","Bélgica":"🇧🇪","Colombia":"🇨🇴","Uruguay":"🇺🇾","Chile":"🇨🇱",
+  "Japón":"🇯🇵","Corea del Sur":"🇰🇷","Marruecos":"🇲🇦","Senegal":"🇸🇳","Nigeria":"🇳🇬",
+  "Costa de Marfil":"🇨🇮","Ghana":"🇬🇭","Camerún":"🇨🇲","Sudáfrica":"🇿🇦","Egipto":"🇪🇬",
+  "Arabia Saudita":"🇸🇦","Irán":"🇮🇷","Catar":"🇶🇦","Australia":"🇦🇺","Ecuador":"🇪🇨",
+  "Perú":"🇵🇪","Paraguay":"🇵🇾","Venezuela":"🇻🇪","Bolivia":"🇧🇴","Panamá":"🇵🇦",
+  "Costa Rica":"🇨🇷","Honduras":"🇭🇳","Jamaica":"🇯🇲","Cuba":"🇨🇺","El Salvador":"🇸🇻",
+  "Italia":"🇮🇹","Croacia":"🇭🇷","Polonia":"🇵🇱","Serbia":"🇷🇸","Dinamarca":"🇩🇰",
+  "Suecia":"🇸🇪","Noruega":"🇳🇴","Suiza":"🇨🇭","Austria":"🇦🇹",
+  "Turquía":"🇹🇷","Grecia":"🇬🇷","Ucrania":"🇺🇦","Rumania":"🇷🇴","Hungría":"🇭🇺",
+  "Escocia":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Gales":"🏴󠁧󠁢󠁷󠁬󠁳󠁿","Eslovaquia":"🇸🇰","Eslovenia":"🇸🇮",
+  "Argelia":"🇩🇿","Túnez":"🇹🇳","Mali":"🇲🇱","Irak":"🇮🇶","Jordania":"🇯🇴","Nueva Zelanda":"🇳🇿",
+  "R.D. Congo":"🇨🇩","Rep. Democrática del Congo":"🇨🇩","Bosnia":"🇧🇦","Bosnia y Herzegovina":"🇧🇦",
+  "Cabo Verde":"🇨🇻","Argelia":"🇩🇿",
 };
 function getTeamFlag(teamName){
   if(!teamName) return "";
