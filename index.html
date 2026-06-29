@@ -1314,7 +1314,7 @@ window.goToGlobal=function(){
   const tab=document.querySelector("#main-tabs .tab:nth-child(4)");
   if(tab) showTab("global",tab);
 };
-function dismissRulesTimeBanner(){
+window.dismissRulesTimeBanner = function(){
   const bar = document.getElementById("rules-time-bar");
   if(bar) bar.classList.add("off");
   localStorage.setItem("ruleTimeBannerSeen2","1");
