@@ -600,6 +600,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
           <tr><td>Resultado único</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td></tr>
           <tr><td>Pregunta extra</td><td>1</td><td>1</td><td>1</td><td>2</td><td>2</td><td>3</td></tr>
         </table>
+        <div style="background:rgba(255,200,0,.13);border:1px solid rgba(255,200,0,.45);border-radius:8px;padding:8px 12px;margin:10px 0 6px;font-size:12px;color:var(--t1)">⏱️ <strong>Tiempo de cómputo:</strong> En 16avos el marcador exacto vale solo a <strong>90 minutos</strong>. Desde Octavos en adelante se cuenta el marcador final incluyendo prórroga (<strong>120 min</strong>) si la hay.</div>
         <div class="rule-tip">💡 Marcador exacto, diferencia de goles y ganador/empate <strong>no se acumulan</strong> — solo se otorga el de mayor puntaje.</div>
         <div class="rule-tip" style="margin-top:6px">💡 Resultado único (+3): bonus si acertaste el marcador exacto y eres el único en la polla con ese pronóstico.</div>
         <div class="rule-tip" style="margin-top:6px">💡 Pregunta extra y resultado único sí acumulan con los demás.</div>
@@ -929,8 +930,8 @@ const M_RAW = [
   {id:96,ph:"Octavos",gr:"Octavos",aDate:"2026-07-07",aTime:"17:00",home:"Gan.P85",hf:"🏳️",away:"Gan.P87",af:"🏳️",r:"8",q:"¿Cómo terminará el primer tiempo?",opts:["Gana __HOME__","Empate","Gana __AWAY__"]},
   // Cuartos — Jul 9–11 (ESPN: Jul9 4pm ET, Jul10 12pm ET, Jul11 5pm ET + 8pm ET)
   {id:97,ph:"Cuartos",gr:"Cuartos",aDate:"2026-07-09",aTime:"17:00",home:"Gan.P89",hf:"🏳️",away:"Gan.P90",af:"🏳️",r:"4",q:"¿Cómo se definirá el partido?",opts:["90 minutos","Alargue","Penales"]},
-  {id:98,ph:"Cuartos",gr:"Cuartos",aDate:"2026-07-10",aTime:"16:00",home:"Gan.P91",hf:"🏳️",away:"Gan.P92",af:"🏳️",r:"4",q:"¿Qué equipo tendrá más remates al arco?",opts:["__HOME__","__AWAY__","Igual cantidad"]},
-  {id:99,ph:"Cuartos",gr:"Cuartos",aDate:"2026-07-11",aTime:"18:00",home:"Gan.P93",hf:"🏳️",away:"Gan.P94",af:"🏳️",r:"4",q:"¿Qué equipo tendrá más tiros totales?",opts:["__HOME__","__AWAY__","Igual cantidad"]},
+  {id:98,ph:"Cuartos",gr:"Cuartos",aDate:"2026-07-10",aTime:"16:00",home:"Gan.P93",hf:"🏳️",away:"Gan.P94",af:"🏳️",r:"4",q:"¿Qué equipo tendrá más remates al arco?",opts:["__HOME__","__AWAY__","Igual cantidad"]},
+  {id:99,ph:"Cuartos",gr:"Cuartos",aDate:"2026-07-11",aTime:"18:00",home:"Gan.P91",hf:"🏳️",away:"Gan.P92",af:"🏳️",r:"4",q:"¿Qué equipo tendrá más tiros totales?",opts:["__HOME__","__AWAY__","Igual cantidad"]},
   {id:100,ph:"Cuartos",gr:"Cuartos",aDate:"2026-07-11",aTime:"22:00",home:"Gan.P95",hf:"🏳️",away:"Gan.P96",af:"🏳️",r:"4",q:"¿Habrá más o menos de 2,5 goles?",opts:["Más de 2,5 goles","Menos de 2,5 goles"]},
   // Semifinales — Jul 14–15 (ESPN: Jul14 2pm ET, Jul15 3pm ET)
   {id:101,ph:"Semifinal",gr:"Semifinal",aDate:"2026-07-14",aTime:"15:00",home:"Gan.P97",hf:"🏳️",away:"Gan.P98",af:"🏳️",r:"2",q:"¿Qué equipo tendrá mayor posesión?",opts:["__HOME__","__AWAY__","Igual posesión"]},
@@ -1722,7 +1723,9 @@ function calcLiveBonus(){
         p={...p,extra:p.extra.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)};
       }
       const resolvedQr=(r.qr||null)?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):null;
-      const {pts, cat} = calcMatchPts(p, r.h, r.a, resolvedQr, rp, isNew, allPicks);
+      const rh2=(m.r==="16"&&r.h90!=null)?r.h90:r.h;
+      const ra2=(m.r==="16"&&r.a90!=null)?r.a90:r.a;
+      const {pts, cat} = calcMatchPts(p, rh2, ra2, resolvedQr, rp, isNew, allPicks);
       bonus[uid]=(bonus[uid]||0)+pts;
       const catRank={exact:3,diff:2,win:1,none:0};
       if(!bonusCat[uid]||catRank[cat]>catRank[bonusCat[uid]]) bonusCat[uid]=cat;
@@ -1754,7 +1757,10 @@ function renderLive(){
         p={...p,extra:p.extra.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)};
       }
       const resolvedQr = (r.qr||null) ? (r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away) : null;
-      const {pts} = calcMatchPts(p, r.h, r.a, resolvedQr, rp, isNew, allMemberPicks);
+      // 16avos: usar marcador a 90min; Octavos+: marcador final (incl. prórroga)
+      const rh = (m.r==="16" && r.h90!=null) ? r.h90 : r.h;
+      const ra = (m.r==="16" && r.a90!=null) ? r.a90 : r.a;
+      const {pts} = calcMatchPts(p, rh, ra, resolvedQr, rp, isNew, allMemberPicks);
       return{n:mem.dname||"?",s:`${p.h}-${p.a}`,p:p.extra||"—",me:uid===CUR.uid,pts,isRandom:!!p.isRandom};
     }).filter(Boolean).sort((a,b)=>b.me-a.me);
     const oh=picks.map(o=>{
@@ -2853,6 +2859,12 @@ async function fetchLive(){
       const h = parseInt(home.score)||0;
       const a = parseInt(away.score)||0;
       const min = comp.status?.clock||0;
+      // Calcular marcador a 90 min (sin prórroga) desde linescores
+      const homeLines = home.linescores||[];
+      const awayLines = away.linescores||[];
+      // linescores[0]=1er tiempo, [1]=2do tiempo, [2]=prórroga (si existe)
+      const h90 = homeLines.length>=2 ? (parseInt(homeLines[0]?.value)||0)+(parseInt(homeLines[1]?.value)||0) : h;
+      const a90 = awayLines.length>=2 ? (parseInt(awayLines[0]?.value)||0)+(parseInt(awayLines[1]?.value)||0) : a;
       const isLive = ["STATUS_IN_PROGRESS","STATUS_HALFTIME","STATUS_END_PERIOD","STATUS_FIRST_HALF","STATUS_SECOND_HALF"].includes(status)||(status.includes("PROGRESS")||status.includes("HALF"));
       const isDone = ["STATUS_FINAL","STATUS_FULL_TIME","STATUS_FINAL_AET","STATUS_FINAL_PEN"].includes(status)||status.includes("FINAL");
       console.log(`[ESPN] ${ev.name}: ${status} live:${isLive} done:${isDone} ${h}-${a}`);
@@ -2867,7 +2879,7 @@ async function fetchLive(){
         // Try to auto-answer question in real time (provisional — may update again)
         const liveQr = await autoAnswerQuestion(ev.id, mid);
         const liveUpdate = {
-          h, a, live:true, locked:false, min:Math.round(min/60)||0,
+          h, a, h90, a90, live:true, locked:false, min:Math.round(min/60)||0,
           homeTeam:homeName, awayTeam:awayName, espnId:ev.id
         };
         // Only set qr if not already manually set — don't overwrite admin corrections
@@ -2885,7 +2897,7 @@ async function fetchLive(){
           const existingQr = pollaLive.results?.[mid]?.qr;
           const finalQr = existingQr || qr || null;
           updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
-            h, a, live:false, locked:true,
+            h, a, h90, a90, live:false, locked:true,
             homeTeam:homeName, awayTeam:awayName, espnId:ev.id,
             ...(finalQr ? {qr: finalQr} : {})
           };
@@ -3351,7 +3363,9 @@ window.adminSaveQr = async function(btn){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
           p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
-        const {pts,ok,ex,qOk}=calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
+        const rh3=(match.r==="16"&&res.h90!=null)?res.h90:res.h;
+        const ra3=(match.r==="16"&&res.a90!=null)?res.a90:res.a;
+        const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,res.qr,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
         ptsPerMatch[match.id]  = pts;
         okPerMatch[match.id]   = ok;
@@ -4200,7 +4214,9 @@ window.adminRecalcNew = async function(btn){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
           p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
-        const {pts,ok,ex,qOk}=calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
+        const rh3=(match.r==="16"&&res.h90!=null)?res.h90:res.h;
+        const ra3=(match.r==="16"&&res.a90!=null)?res.a90:res.a;
+        const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,res.qr,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
         ptsPerMatch[match.id]=pts; okPerMatch[match.id]=ok;
         exPerMatch[match.id]=ex; qPtsPerMatch[match.id]=qOk;
