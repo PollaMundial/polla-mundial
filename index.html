@@ -518,8 +518,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
   </div>
 
   <div class="rules-time-bar" id="rules-time-bar">
-    <div style="font-size:16px;flex-shrink:0">⏱️</div>
-    <div style="flex:1;font-size:12px;color:#1a4a7a;line-height:1.4"><strong>Nuevo en eliminatorias:</strong> En 16avos cuenta el marcador a 90 min (sin prórroga). Desde Octavos en adelante cuenta el marcador final incluyendo prórroga (120 min). <span style="text-decoration:underline;cursor:pointer;font-weight:600" onclick="dismissRulesTimeBanner();document.querySelector('.tab[onclick*=reglas]').click()">Ver reglas →</span></div>
+    <div style="font-size:16px;flex-shrink:0">📞</div>
+    <div style="flex:1;font-size:12px;color:#1a4a7a;line-height:1.4"><strong>Aviso:</strong> Después de una reunión con soporte, vuelven a contar los marcadores a <strong>90 minutos</strong> solamente. ⏱️</div>
     <button style="background:none;border:none;font-size:16px;cursor:pointer;color:#1a4a7a;flex-shrink:0;padding:0 2px" onclick="dismissRulesTimeBanner()" title="Cerrar">✕</button>
   </div>
   <div class="global-reminder-bar off" id="global-reminder-bar">
@@ -607,7 +607,6 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
           <tr><td>Resultado único</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td><td>+3</td></tr>
           <tr><td>Pregunta extra</td><td>1</td><td>1</td><td>1</td><td>2</td><td>2</td><td>3</td></tr>
         </table>
-        <div style="background:rgba(255,200,0,.13);border:1px solid rgba(255,200,0,.45);border-radius:8px;padding:8px 12px;margin:10px 0 6px;font-size:12px;color:var(--t1)">⏱️ <strong>¿A cuántos minutos cuenta el marcador?</strong> En 16avos solo cuentan los <strong>90 minutos</strong> reglamentarios. Desde Octavos en adelante cuenta el marcador final incluyendo prórroga (<strong>120 min</strong>) si la hay.</div>
         <div class="rule-tip">💡 Marcador exacto, diferencia de goles y ganador/empate <strong>no se acumulan</strong> — solo se otorga el de mayor puntaje.</div>
         <div class="rule-tip" style="margin-top:6px">💡 Resultado único (+3): bonus si acertaste el marcador exacto y eres el único en la polla con ese pronóstico.</div>
         <div class="rule-tip" style="margin-top:6px">💡 Pregunta extra y resultado único sí acumulan con los demás.</div>
@@ -674,6 +673,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">Selecciona un partido finalizado y corrige la respuesta a la pregunta extra si es necesario.</div>
         <select class="g-sel" id="admin-match-sel" style="margin-bottom:8px"></select>
         <div id="admin-extra-opts" style="margin-bottom:10px"></div>
+        <div id="admin-winner-sel" style="display:none;background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:10px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">🏆 Empate — ¿Quién ganó en prórroga/penales?</div>
+          <div id="admin-winner-opts" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
         <button class="sbtn full" style="background:var(--gd)" onclick="adminSaveQr(this)">💾 Guardar respuesta</button>
       </div>
       <div class="slbl">Recalcular puntos</div>
@@ -1317,12 +1320,12 @@ window.goToGlobal=function(){
 window.dismissRulesTimeBanner = function(){
   const bar = document.getElementById("rules-time-bar");
   if(bar) bar.classList.add("off");
-  localStorage.setItem("ruleTimeBannerSeen2","1");
+  localStorage.setItem("ruleTimeBannerSeen3","1");
 }
 function updateRulesTimeBanner(){
   const bar = document.getElementById("rules-time-bar");
   if(!bar) return;
-  if(localStorage.getItem("ruleTimeBannerSeen2")==="1"){
+  if(localStorage.getItem("ruleTimeBannerSeen3")==="1"){
     bar.classList.add("off");
   } else {
     bar.classList.remove("off");
@@ -1511,8 +1514,7 @@ function resolveKnockoutSlot(slot){
   if(mGan){
     const mid=parseInt(mGan[1]),r=results[mid];
     if(r?.locked&&r.h!=null&&r.a!=null){
-      const homeWon=r.h>r.a,awayWon=r.a>r.h;
-      const winner=homeWon?r.homeTeam:awayWon?r.awayTeam:null;
+      const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null);
       if(winner)return{name:winner,flag:getTeamFlag(winner)||null};
     }
     return{name:slot,flag:null};
@@ -1521,8 +1523,8 @@ function resolveKnockoutSlot(slot){
   if(mPer){
     const mid=parseInt(mPer[1]),r=results[mid];
     if(r?.locked&&r.h!=null&&r.a!=null){
-      const homeWon=r.h>r.a,awayWon=r.a>r.h;
-      const loser=homeWon?r.awayTeam:awayWon?r.homeTeam:null;
+      const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.homeTeam:null);
+      const loser=winner?(winner===r.homeTeam?r.awayTeam:r.homeTeam):null;
       if(loser)return{name:loser,flag:getTeamFlag(loser)||null};
     }
     return{name:slot,flag:null};
@@ -1744,8 +1746,8 @@ function calcLiveBonus(){
         p={...p,extra:p.extra.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)};
       }
       const resolvedQr=(r.qr||null)?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):null;
-      const rh2=(m.r==="16"&&r.h90!=null)?r.h90:r.h;
-      const ra2=(m.r==="16"&&r.a90!=null)?r.a90:r.a;
+      const rh2=(r.h90!=null)?r.h90:r.h;
+      const ra2=(r.a90!=null)?r.a90:r.a;
       const {pts, cat} = calcMatchPts(p, rh2, ra2, resolvedQr, rp, isNew, allPicks);
       bonus[uid]=(bonus[uid]||0)+pts;
       const catRank={exact:3,diff:2,win:1,none:0};
@@ -1779,8 +1781,8 @@ function renderLive(){
       }
       const resolvedQr = (r.qr||null) ? (r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away) : null;
       // 16avos: usar marcador a 90min; Octavos+: marcador final (incl. prórroga)
-      const rh = (m.r==="16" && r.h90!=null) ? r.h90 : r.h;
-      const ra = (m.r==="16" && r.a90!=null) ? r.a90 : r.a;
+      const rh = (r.h90!=null) ? r.h90 : r.h;
+      const ra = (r.a90!=null) ? r.a90 : r.a;
       const {pts} = calcMatchPts(p, rh, ra, resolvedQr, rp, isNew, allMemberPicks);
       return{n:mem.dname||"?",s:`${p.h}-${p.a}`,p:p.extra||"—",me:uid===CUR.uid,pts,isRandom:!!p.isRandom};
     }).filter(Boolean).sort((a,b)=>b.me-a.me);
@@ -2119,7 +2121,8 @@ function buildCruces(){
     if(mGan){
       const mid=parseInt(mGan[1]),r=results[mid];
       if(r?.locked&&r.h!=null&&r.a!=null){
-        const winner=r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null;
+        // Si hay empate con ganador manual (prórroga/penales), usar ese
+        const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null);
         if(winner)return{name:winner,flag:getTeamFlag(winner)||"🏳️"};
       }
       return{name:slot,flag:"🏳️"};
@@ -2128,7 +2131,9 @@ function buildCruces(){
     if(mPer){
       const mid=parseInt(mPer[1]),r=results[mid];
       if(r?.locked&&r.h!=null&&r.a!=null){
-        const loser=r.h>r.a?r.awayTeam:r.a>r.h?r.homeTeam:null;
+        // El perdedor es el que no es el winner
+        const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.homeTeam:null);
+        const loser=winner?(winner===r.homeTeam?r.awayTeam:r.homeTeam):null;
         if(loser)return{name:loser,flag:getTeamFlag(loser)||"🏳️"};
       }
       return{name:slot,flag:"🏳️"};
@@ -2689,6 +2694,7 @@ function buildAdmin(){
 // ── ADMIN MANUAL RESULT ──
 let adminScores = {h:0, a:0};
 let adminExtra = null;
+let adminWinner = null;
 
 function buildAdminMatchSelector(){
   const sel = document.getElementById("admin-match-sel");
@@ -2714,6 +2720,7 @@ function buildAdminMatchSelector(){
     const r = pollaLive.results?.[mid]||{};
     adminScores = {h: r.h||0, a: r.a||0};
     adminExtra = r.qr||null;
+    adminWinner = r.winner||null;
     const optsEl = document.getElementById("admin-extra-opts");
     if(!optsEl) return;
     if(m){
@@ -2723,6 +2730,14 @@ function buildAdminMatchSelector(){
         m.opts.map(o => `<button class="obtn${adminExtra===o?' sel':''}" onclick="adminSelectExtra('${o}',this)">${o}</button>`).join("") +
         `</div>` +
         (r.qr ? `<div style="font-size:11px;color:var(--gd);margin-top:6px">✅ Resp. actual: ${(r.qr||"").replace(/__HOME__/g,m?.home||"").replace(/__AWAY__/g,m?.away||"")}</div>` : `<div style="font-size:11px;color:var(--am);margin-top:6px">⚠️ Sin respuesta guardada</div>`);
+      // Selector de ganador
+      const isKo = m.r && m.r!=="g" && m.r!=="16";
+      const winEl = document.getElementById("admin-winner-opts");
+      if(winEl && isKo){
+        const hName = m.home; const aName = m.away;
+        winEl.innerHTML = [hName, aName].map(t=>`<button class="obtn${adminWinner===t?' sel':''}" onclick="adminSelectWinner('${t.replace(/'/g,"\'")}',this)">${t}</button>`).join("");
+      }
+      updateAdminWinnerSelector();
     } else {
       optsEl.innerHTML = "";
     }
@@ -2732,6 +2747,26 @@ function buildAdminMatchSelector(){
 window.adminScore = function(side, delta){
   adminScores[side] = Math.max(0, adminScores[side] + delta);
   document.getElementById("admin-s"+side).textContent = adminScores[side];
+  updateAdminWinnerSelector();
+};
+function updateAdminWinnerSelector(){
+  const mid = getAdminMatchId(); if(!mid) return;
+  const m = MATCHES.find(x=>x.id===mid); if(!m) return;
+  const isKo = m.r && m.r!=="g" && m.r!=="16";
+  const isDraw = adminScores.h === adminScores.a;
+  const el = document.getElementById("admin-winner-sel");
+  if(!el) return;
+  if(isKo && isDraw){
+    el.style.display="block";
+  } else {
+    el.style.display="none";
+    adminWinner = null;
+  }
+}
+window.adminSelectWinner = function(val, btn){
+  document.querySelectorAll("#admin-winner-opts .obtn").forEach(b=>b.classList.remove("sel"));
+  btn.classList.add("sel");
+  adminWinner = val;
 };
 
 window.adminSelectExtra = function(val, btn){
@@ -2789,11 +2824,15 @@ window.adminFinalizeResult = async function(btn){
   if(!confirm(`¿Finalizar ${m.home} ${adminScores.h}-${adminScores.a} ${m.away}?\nPregunta extra: ${adminExtra}\n\nEsto calculará los puntos de todos.`)) return;
   btn.textContent = "Finalizando...";
   try{
+    const isKo = m.r && m.r!=="g" && m.r!=="16";
+    const isDraw = adminScores.h === adminScores.a;
+    if(isKo && isDraw && !adminWinner){ alert("Es empate en eliminatoria — selecciona quién ganó en prórroga/penales."); btn.textContent="✅ Finalizar partido y calcular puntos"; return; }
     await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
       h: adminScores.h, a: adminScores.a,
       live: false, locked: true,
       qr: adminExtra,
-      homeTeam: m.home, awayTeam: m.away
+      homeTeam: m.home, awayTeam: m.away,
+      ...(isKo && isDraw && adminWinner ? {winner: adminWinner} : {})
     });
     await calcPoints(mid, adminScores.h, adminScores.a, adminExtra);
     btn.textContent = "✅ Partido finalizado";
@@ -3384,8 +3423,8 @@ window.adminSaveQr = async function(btn){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
           p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
-        const rh3=(match.r==="16"&&res.h90!=null)?res.h90:res.h;
-        const ra3=(match.r==="16"&&res.a90!=null)?res.a90:res.a;
+        const rh3=(res.h90!=null)?res.h90:res.h;
+        const ra3=(res.a90!=null)?res.a90:res.a;
         const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,res.qr,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
         ptsPerMatch[match.id]  = pts;
@@ -4235,8 +4274,8 @@ window.adminRecalcNew = async function(btn){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
           p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
-        const rh3=(match.r==="16"&&res.h90!=null)?res.h90:res.h;
-        const ra3=(match.r==="16"&&res.a90!=null)?res.a90:res.a;
+        const rh3=(res.h90!=null)?res.h90:res.h;
+        const ra3=(res.a90!=null)?res.a90:res.a;
         const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,res.qr,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
         ptsPerMatch[match.id]=pts; okPerMatch[match.id]=ok;
