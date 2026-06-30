@@ -2731,7 +2731,7 @@ function buildAdminMatchSelector(){
         `</div>` +
         (r.qr ? `<div style="font-size:11px;color:var(--gd);margin-top:6px">✅ Resp. actual: ${(r.qr||"").replace(/__HOME__/g,m?.home||"").replace(/__AWAY__/g,m?.away||"")}</div>` : `<div style="font-size:11px;color:var(--am);margin-top:6px">⚠️ Sin respuesta guardada</div>`);
       // Selector de ganador
-      const isKo = m.r && m.r!=="g" && m.r!=="16";
+      const isKo = m.r && m.r!=="g";
       const winEl = document.getElementById("admin-winner-opts");
       if(winEl && isKo){
         const hName = m.home; const aName = m.away;
@@ -2752,7 +2752,7 @@ window.adminScore = function(side, delta){
 function updateAdminWinnerSelector(){
   const mid = getAdminMatchId(); if(!mid) return;
   const m = MATCHES.find(x=>x.id===mid); if(!m) return;
-  const isKo = m.r && m.r!=="g" && m.r!=="16";
+  const isKo = m.r && m.r!=="g";
   const isDraw = adminScores.h === adminScores.a;
   const el = document.getElementById("admin-winner-sel");
   if(!el) return;
@@ -2824,7 +2824,7 @@ window.adminFinalizeResult = async function(btn){
   if(!confirm(`¿Finalizar ${m.home} ${adminScores.h}-${adminScores.a} ${m.away}?\nPregunta extra: ${adminExtra}\n\nEsto calculará los puntos de todos.`)) return;
   btn.textContent = "Finalizando...";
   try{
-    const isKo = m.r && m.r!=="g" && m.r!=="16";
+    const isKo = m.r && m.r!=="g";
     const isDraw = adminScores.h === adminScores.a;
     if(isKo && isDraw && !adminWinner){ alert("Es empate en eliminatoria — selecciona quién ganó en prórroga/penales."); btn.textContent="✅ Finalizar partido y calcular puntos"; return; }
     await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
