@@ -673,10 +673,6 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">Selecciona un partido finalizado y corrige la respuesta a la pregunta extra si es necesario.</div>
         <select class="g-sel" id="admin-match-sel" style="margin-bottom:8px"></select>
         <div id="admin-extra-opts" style="margin-bottom:10px"></div>
-        <div id="admin-winner-sel" style="display:none;background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:10px;margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">🏆 Empate — ¿Quién ganó en prórroga/penales?</div>
-          <div id="admin-winner-opts" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-        </div>
         <button class="sbtn full" style="background:var(--gd)" onclick="adminSaveQr(this)">💾 Guardar respuesta</button>
       </div>
       <div class="slbl">Recalcular puntos</div>
@@ -2694,7 +2690,7 @@ function buildAdmin(){
 // ── ADMIN MANUAL RESULT ──
 let adminScores = {h:0, a:0};
 let adminExtra = null;
-let adminWinner = null;
+let adminWinner = null; // preserved from existing data — set only via multipolla panel now
 
 function buildAdminMatchSelector(){
   const sel = document.getElementById("admin-match-sel");
@@ -2720,7 +2716,7 @@ function buildAdminMatchSelector(){
     const r = pollaLive.results?.[mid]||{};
     adminScores = {h: r.h||0, a: r.a||0};
     adminExtra = r.qr||null;
-    adminWinner = r.winner||null;
+    adminWinner = r.winner||null; // preserve existing winner if set via multipolla
     const optsEl = document.getElementById("admin-extra-opts");
     if(!optsEl) return;
     if(m){
@@ -2730,14 +2726,6 @@ function buildAdminMatchSelector(){
         m.opts.map(o => `<button class="obtn${adminExtra===o?' sel':''}" onclick="adminSelectExtra('${o}',this)">${o}</button>`).join("") +
         `</div>` +
         (r.qr ? `<div style="font-size:11px;color:var(--gd);margin-top:6px">✅ Resp. actual: ${(r.qr||"").replace(/__HOME__/g,m?.home||"").replace(/__AWAY__/g,m?.away||"")}</div>` : `<div style="font-size:11px;color:var(--am);margin-top:6px">⚠️ Sin respuesta guardada</div>`);
-      // Selector de ganador
-      const isKo = m.r && m.r!=="g";
-      const winEl = document.getElementById("admin-winner-opts");
-      if(winEl && isKo){
-        const hName = m.home; const aName = m.away;
-        winEl.innerHTML = [hName, aName].map(t=>`<button class="obtn${adminWinner===t?' sel':''}" onclick="adminSelectWinner('${t.replace(/'/g,"\'")}',this)">${t}</button>`).join("");
-      }
-      updateAdminWinnerSelector();
     } else {
       optsEl.innerHTML = "";
     }
@@ -2747,26 +2735,6 @@ function buildAdminMatchSelector(){
 window.adminScore = function(side, delta){
   adminScores[side] = Math.max(0, adminScores[side] + delta);
   document.getElementById("admin-s"+side).textContent = adminScores[side];
-  updateAdminWinnerSelector();
-};
-function updateAdminWinnerSelector(){
-  const mid = getAdminMatchId(); if(!mid) return;
-  const m = MATCHES.find(x=>x.id===mid); if(!m) return;
-  const isKo = m.r && m.r!=="g";
-  const isDraw = adminScores.h === adminScores.a;
-  const el = document.getElementById("admin-winner-sel");
-  if(!el) return;
-  if(isKo && isDraw){
-    el.style.display="block";
-  } else {
-    el.style.display="none";
-    adminWinner = null;
-  }
-}
-window.adminSelectWinner = function(val, btn){
-  document.querySelectorAll("#admin-winner-opts .obtn").forEach(b=>b.classList.remove("sel"));
-  btn.classList.add("sel");
-  adminWinner = val;
 };
 
 window.adminSelectExtra = function(val, btn){
@@ -2826,7 +2794,11 @@ window.adminFinalizeResult = async function(btn){
   try{
     const isKo = m.r && m.r!=="g";
     const isDraw = adminScores.h === adminScores.a;
-    if(isKo && isDraw && !adminWinner){ alert("Es empate en eliminatoria — selecciona quién ganó en prórroga/penales."); btn.textContent="✅ Finalizar partido y calcular puntos"; return; }
+    if(isKo && isDraw && !adminWinner){
+      if(!confirm("⚠️ Es empate en eliminatoria. El ganador (prórroga/penales) se define desde el Panel multi-polla, no aquí.\n\n¿Continuar y finalizar como empate? (el bracket no avanzará ningún equipo hasta que definas el ganador en el Panel multi-polla)")) {
+        btn.textContent="✅ Finalizar partido y calcular puntos"; return;
+      }
+    }
     await update(ref(db,`pollas/${CUR.pollaId}/results/${mid}`),{
       h: adminScores.h, a: adminScores.a,
       live: false, locked: true,
@@ -3980,7 +3952,16 @@ function renderMultiPollaPanel(pollaData){
     const ko = getKoTime(m);
     const diffH = (ko - now) / 3600000;
     // Include: past 6h (may still be live), today, and tomorrow
-    return diffH > -6 && (m.aDate===todayStr || m.aDate===tomorrowStr || diffH < 26);
+    if(diffH > -6 && (m.aDate===todayStr || m.aDate===tomorrowStr || diffH < 26)) return true;
+    // Also include past knockout matches that ended in a draw without a winner defined yet
+    if(m.r && m.r!=="g"){
+      const anyResult = pollaData.find(pd => pd.results[m.id]?.locked);
+      if(anyResult){
+        const r = anyResult.results[m.id];
+        if(r.h===r.a && !r.winner) return true;
+      }
+    }
+    return false;
   });
   if(!activeMatches.length){
     content.innerHTML = `<div style="text-align:center;padding:20px;color:var(--t3)">No hay partidos activos en este momento.</div>`;
@@ -3989,12 +3970,12 @@ function renderMultiPollaPanel(pollaData){
   // Shared state keyed by matchId only — one score applies to all pollas
   activeMatches.forEach(m => {
     if(mpState[m.id] !== undefined) return;
-    let h=0, a=0, extra=null;
+    let h=0, a=0, extra=null, winner=null;
     for(const pd of pollaData){
       const r = pd.results[m.id]||{};
-      if(r.h||r.a||r.qr){ h=r.h||0; a=r.a||0; extra=r.qr||null; break; }
+      if(r.h||r.a||r.qr){ h=r.h||0; a=r.a||0; extra=r.qr||null; winner=r.winner||null; break; }
     }
-    mpState[m.id] = {h, a, extra};
+    mpState[m.id] = {h, a, extra, winner};
   });
   const pollaNames = pollaData.map(pd => pd.pollaName);
   let html = '';
@@ -4027,6 +4008,13 @@ function renderMultiPollaPanel(pollaData){
           <button class="mp-sbtn" onclick="mpAdjShared(${m.id},'a',1)">+</button>
         </div>
       </div>
+      ${s.h===s.a ? `<div id="mp-winner-sel-${m.id}" style="background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:8px 10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏆 Empate — ¿Quién ganó en prórroga/penales?</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="obtn${s.winner===m.home?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.home.replace(/'/g,"'")}',this)">${m.home}</button>
+          <button class="obtn${s.winner===m.away?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.away.replace(/'/g,"'")}',this)">${m.away}</button>
+        </div>
+      </div>` : ''}
       <div class="mp-extra-q">${m.q.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)}</div>
       <div class="mp-extra-opts" id="mp-opts-${m.id}" style="margin-top:4px;margin-bottom:8px">
         ${m.opts.map(o=>{const ol=o.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away);return`<button class="obtn${s.extra===ol?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${ol.replace(/'/g,"'")}',this)">${ol}</button>`;}).join('')}
@@ -4034,6 +4022,16 @@ function renderMultiPollaPanel(pollaData){
       <div style="background:var(--bg);border-radius:var(--rs);padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--t2)">
         Se aplica a: <strong>${pollaNames.join(' · ')}</strong>
       </div>
+      ` : (m.r && m.r!=="g" && s.h===s.a ? `
+      <div id="mp-winner-sel-${m.id}" style="background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:8px 10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏆 Partido cerrado en empate — ¿Quién ganó en prórroga/penales?</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="obtn${s.winner===m.home?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.home.replace(/'/g,"'")}',this)">${m.home}</button>
+          <button class="obtn${s.winner===m.away?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.away.replace(/'/g,"'")}',this)">${m.away}</button>
+        </div>
+        <button class="mp-act-btn" style="width:100%;background:var(--gd);color:#fff;padding:8px" onclick="mpSaveWinnerOnly(${m.id},window._mpPollaData,this)">💾 Guardar ganador (no toca puntos)</button>
+      </div>
+      ` : '')}
       <div style="display:flex;gap:6px">
         <button class="mp-act-btn" style="flex:1;background:var(--bm);color:#fff;padding:8px" onclick="mpUpdateAllLive(${m.id},window._mpPollaData,this)">🔄 Actualizar score</button>
         <button class="mp-act-btn" style="flex:1;background:var(--gd);color:#fff;padding:8px" onclick="mpFinalizeAll(${m.id},window._mpPollaData,this)">✅ Finalizar partido</button>
@@ -4046,11 +4044,19 @@ function renderMultiPollaPanel(pollaData){
   window._mpPollaData = pollaData;
 }
 
+window.mpSelectWinnerShared = function(mid, val, btn){
+  if(!mpState[mid]) mpState[mid]={h:0,a:0,extra:null,winner:null};
+  mpState[mid].winner = val;
+  document.querySelectorAll(`#mp-winner-sel-${mid} .obtn`).forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+};
 window.mpAdjShared = function(mid, side, delta){
-  if(!mpState[mid]) mpState[mid]={h:0,a:0,extra:null};
+  if(!mpState[mid]) mpState[mid]={h:0,a:0,extra:null,winner:null};
   mpState[mid][side] = Math.max(0, (mpState[mid][side]||0) + delta);
   const el = document.getElementById('mp-s'+side[0]+'-'+mid);
   if(el) el.textContent = mpState[mid][side];
+  // Re-render this card to show/hide the winner selector on draw
+  if(typeof renderMultiPollaPanel === 'function' && window._mpPollaData) renderMultiPollaPanel(window._mpPollaData);
 };
 
 window.mpSelectExtraShared = function(mid, val, btn){
@@ -4075,13 +4081,32 @@ window.mpUpdateAllLive = async function(mid, pollaData, btn){
   } catch(e){ btn.textContent='⚠️ Error'; btn.disabled=false; }
 };
 
+window.mpSaveWinnerOnly = async function(mid, pollaData, btn){
+  const s = mpState[mid]||{};
+  const pd = pollaData || window._mpPollaData || [];
+  if(!s.winner){ alert('Selecciona el ganador primero.'); return; }
+  const m = MATCHES.find(x=>x.id===mid);
+  if(!confirm(`¿Guardar a ${s.winner} como ganador de ${m?.home} vs ${m?.away} en ${pd.length} polla${pd.length>1?'s':''}?\n\nEsto solo actualiza el bracket — no afecta los puntos ya calculados.`)) return;
+  btn.textContent='⏳ Guardando...'; btn.disabled=true;
+  try{
+    for(const p of pd){
+      await update(ref(db,`pollas/${p.pollaId}/results/${mid}`),{ winner: s.winner });
+    }
+    btn.textContent='✅ Ganador guardado';
+    setTimeout(()=>{ openMultiPollaPanel(); }, 1200);
+  } catch(e){ btn.textContent='⚠️ Error'; btn.disabled=false; }
+};
+
 window.mpFinalizeAll = async function(mid, pollaData, btn){
-  const s = mpState[mid]||{h:0,a:0,extra:null};
+  const s = mpState[mid]||{h:0,a:0,extra:null,winner:null};
   const pd = pollaData || window._mpPollaData || [];
   if(!s.extra){ alert('Selecciona la respuesta a la pregunta extra antes de finalizar.'); return; }
   const m = MATCHES.find(x=>x.id===mid);
+  const isKo = m?.r && m.r!=="g";
+  const isDraw = s.h === s.a;
+  if(isKo && isDraw && !s.winner){ alert('Es empate en eliminatoria — selecciona quién ganó en prórroga/penales.'); return; }
   if(!confirm(`¿Finalizar ${m?.home} ${s.h}-${s.a} ${m?.away} en ${pd.length} polla${pd.length>1?'s':''}?
-Pregunta extra: ${s.extra}`)) return;
+Pregunta extra: ${s.extra}${isKo&&isDraw?`\nGanador (prórroga/penales): ${s.winner}`:''}`)) return;
   btn.textContent='⏳ Finalizando...'; btn.disabled=true;
   try{
     for(const p of pd){
@@ -4089,7 +4114,8 @@ Pregunta extra: ${s.extra}`)) return;
       if(rSnap.exists() && rSnap.val().ptsAwarded) continue; // already awarded
       await update(ref(db,`pollas/${p.pollaId}/results/${mid}`),{
         h:s.h, a:s.a, live:false, locked:true, qr:s.extra,
-        homeTeam:m?.home||'', awayTeam:m?.away||''
+        homeTeam:m?.home||'', awayTeam:m?.away||'',
+        ...(isKo && isDraw && s.winner ? {winner:s.winner} : {})
       });
       const [memSnap, resSnap] = await Promise.all([
         get(ref(db,`pollas/${p.pollaId}/members`)),
