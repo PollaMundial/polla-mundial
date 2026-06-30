@@ -4022,6 +4022,10 @@ function renderMultiPollaPanel(pollaData){
       <div style="background:var(--bg);border-radius:var(--rs);padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--t2)">
         Se aplica a: <strong>${pollaNames.join(' · ')}</strong>
       </div>
+      <div style="display:flex;gap:6px">
+        <button class="mp-act-btn" style="flex:1;background:var(--bm);color:#fff;padding:8px" onclick="mpUpdateAllLive(${m.id},window._mpPollaData,this)">🔄 Actualizar score</button>
+        <button class="mp-act-btn" style="flex:1;background:var(--gd);color:#fff;padding:8px" onclick="mpFinalizeAll(${m.id},window._mpPollaData,this)">✅ Finalizar partido</button>
+      </div>
       ` : (m.r && m.r!=="g" && s.h===s.a ? `
       <div id="mp-winner-sel-${m.id}" style="background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:8px 10px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏆 Partido cerrado en empate — ¿Quién ganó en prórroga/penales?</div>
@@ -4031,12 +4035,7 @@ function renderMultiPollaPanel(pollaData){
         </div>
         <button class="mp-act-btn" style="width:100%;background:var(--gd);color:#fff;padding:8px" onclick="mpSaveWinnerOnly(${m.id},window._mpPollaData,this)">💾 Guardar ganador (no toca puntos)</button>
       </div>
-      ` : '')}
-      <div style="display:flex;gap:6px">
-        <button class="mp-act-btn" style="flex:1;background:var(--bm);color:#fff;padding:8px" onclick="mpUpdateAllLive(${m.id},window._mpPollaData,this)">🔄 Actualizar score</button>
-        <button class="mp-act-btn" style="flex:1;background:var(--gd);color:#fff;padding:8px" onclick="mpFinalizeAll(${m.id},window._mpPollaData,this)">✅ Finalizar partido</button>
-      </div>
-      ` : `<div style="font-size:12px;color:var(--t3);text-align:center;padding:8px 0">Partido finalizado en todas las pollas</div>`}
+      ` : `<div style="font-size:12px;color:var(--t3);text-align:center;padding:8px 0">Partido finalizado en todas las pollas</div>`)}
     </div>`;
   });
   content.innerHTML = html || `<div style="text-align:center;padding:20px;color:var(--t3)">No hay partidos activos.</div>`;
