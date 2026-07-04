@@ -1512,8 +1512,18 @@ function resolveKnockoutSlot(slot){
   if(mGan){
     const mid=parseInt(mGan[1]),r=results[mid];
     if(r?.locked&&r.h!=null&&r.a!=null){
-      const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null);
+      // Try winner field first, then homeTeam/awayTeam, then fallback to MATCH home/away
+      const m=MATCHES.find(x=>x.id===mid);
+      const hName=r.homeTeam&&!r.homeTeam.startsWith("Gan.")&&!r.homeTeam.startsWith("Per.")&&!r.homeTeam.startsWith("1°")&&!r.homeTeam.startsWith("2°")&&!r.homeTeam.startsWith("3°")?r.homeTeam:m?.home;
+      const aName=r.awayTeam&&!r.awayTeam.startsWith("Gan.")&&!r.awayTeam.startsWith("Per.")&&!r.awayTeam.startsWith("1°")&&!r.awayTeam.startsWith("2°")&&!r.awayTeam.startsWith("3°")?r.awayTeam:m?.away;
+      const winner=r.winner||(r.h>r.a?hName:r.a>r.h?aName:null);
       if(winner)return{name:winner,flag:getTeamFlag(winner)||null};
+    }
+    // Match not yet played — try resolving from MATCH definition
+    const m=MATCHES.find(x=>x.id===parseInt(mGan[1]));
+    if(m&&m.home&&!m.home.startsWith("Gan.")&&!m.home.startsWith("Per.")){
+      // MATCH has real team names already defined
+      return{name:m.home,flag:m.hf||getTeamFlag(m.home)||null};
     }
     return{name:slot,flag:null};
   }
@@ -1521,8 +1531,11 @@ function resolveKnockoutSlot(slot){
   if(mPer){
     const mid=parseInt(mPer[1]),r=results[mid];
     if(r?.locked&&r.h!=null&&r.a!=null){
-      const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.homeTeam:null);
-      const loser=winner?(winner===r.homeTeam?r.awayTeam:r.homeTeam):null;
+      const m=MATCHES.find(x=>x.id===mid);
+      const hName=r.homeTeam&&!r.homeTeam.startsWith("Gan.")&&!r.homeTeam.startsWith("Per.")?r.homeTeam:m?.home;
+      const aName=r.awayTeam&&!r.awayTeam.startsWith("Gan.")&&!r.awayTeam.startsWith("Per.")?r.awayTeam:m?.away;
+      const winner=r.winner||(r.h>r.a?hName:r.a>r.h?hName:null);
+      const loser=winner?(winner===hName?aName:hName):null;
       if(loser)return{name:loser,flag:getTeamFlag(loser)||null};
     }
     return{name:slot,flag:null};
@@ -1546,8 +1559,10 @@ function buildCard(m,result){
   const r0=pollaLive.results?.[m.id];
   const homeDisplay = (m.ph!=="Grupos"&&r0?.homeTeam&&!r0.homeTeam.includes("TBD")) ? r0.homeTeam : (m.ph!=="Grupos" ? resolveKnockoutSlot(m.home).name : m.home);
   const awayDisplay = (m.ph!=="Grupos"&&r0?.awayTeam&&!r0.awayTeam.includes("TBD")) ? r0.awayTeam : (m.ph!=="Grupos" ? resolveKnockoutSlot(m.away).name : m.away);
-  const homeFlagR = m.ph!=="Grupos" ? (resolveKnockoutSlot(m.home).flag||m.hf) : m.hf;
-  const awayFlagR = m.ph!=="Grupos" ? (resolveKnockoutSlot(m.away).flag||m.af) : m.af;
+  const _hSlot = m.ph!=="Grupos" ? resolveKnockoutSlot(m.home) : null;
+  const _aSlot = m.ph!=="Grupos" ? resolveKnockoutSlot(m.away) : null;
+  const homeFlagR = m.ph!=="Grupos" ? (_hSlot.flag||getTeamFlag(homeDisplay)||m.hf) : m.hf;
+  const awayFlagR = m.ph!=="Grupos" ? (_aSlot.flag||getTeamFlag(awayDisplay)||m.af) : m.af;
   const myPick=myPicks[m.id]||{h:0,a:0,extra:null};
   if(!localScores[m.id]) localScores[m.id]={h:myPick.h||0,a:myPick.a||0};
   const sh=localScores[m.id].h, sa=localScores[m.id].a;
