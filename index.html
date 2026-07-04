@@ -1854,7 +1854,9 @@ function renderMyPicks(){
     // Build all picks for this match using new system
     const allPicks=Object.entries(members).map(([uid,mem])=>{
       const p=resolvedPicksMap[uid];
-      const {pts,ok,ex,qOk,cat}=calcMatchPts(p,r.h,r.a,r.qr?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):null,rp,isNew,allResolvedPicks);
+      const rh_mp=(r.h90!=null)?r.h90:r.h;
+      const ra_mp=(r.a90!=null)?r.a90:r.a;
+      const {pts,ok,ex,qOk,cat}=calcMatchPts(p,rh_mp,ra_mp,r.qr?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):null,rp,isNew,allResolvedPicks);
       const exact=p.h===r.h&&p.a===r.a;
       const winOk=(p.h>p.a&&r.h>r.a)||(p.h<p.a&&r.h<r.a)||(p.h===p.a&&r.h===r.a);
       return{n:mem.dname||"?",p,pts:pts||0,exact,winOk,qOk,cat,me:uid===CUR.uid};
@@ -4361,9 +4363,25 @@ window.adminRecalcNew = async function(btn){
     const snapshot=snapshotSnap.exists()?snapshotSnap.val():null;
     if(!snapshot){ btn.textContent="⚠️ Guarda el snapshot primero"; btn.disabled=false; return; }
     const newMatches=MATCHES.filter(m=>m.id>=NEW_SYSTEM_FROM_MATCH&&results[m.id]?.locked&&results[m.id]?.qr);
+    // Build resolved picks INCLUDING random for correct "resultado único" check
+    const resolvedPicksRN={};
+    newMatches.forEach(match=>{
+      const pickMap={};
+      Object.entries(members).forEach(([uid,mem])=>{
+        let p=mem.picks?.[match.id];
+        if(!p||p.h==null){
+          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
+        } else if(p.extra){
+          p={...p,extra:p.extra.replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||"")};
+        }
+        pickMap[uid]=p;
+      });
+      resolvedPicksRN[match.id]=pickMap;
+    });
     const allPicksPerMatch={};
     newMatches.forEach(match=>{
-      allPicksPerMatch[match.id]=Object.values(members).map(mem=>mem.picks?.[match.id]).filter(p=>p&&p.h!=null);
+      allPicksPerMatch[match.id]=Object.values(resolvedPicksRN[match.id]);
     });
     const updates={};
     Object.entries(members).forEach(([uid,mem])=>{
@@ -4374,14 +4392,11 @@ window.adminRecalcNew = async function(btn){
       newMatches.forEach(match=>{
         const res=results[match.id];
         const rp=PTS_NEW[match.r]||PTS_NEW.g;
-        let p=mem.picks?.[match.id];
-        if(!p||p.h==null){
-          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
-        }
+        const p=resolvedPicksRN[match.id][uid];
         const rh3=(res.h90!=null)?res.h90:res.h;
         const ra3=(res.a90!=null)?res.a90:res.a;
-        const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,res.qr,rp,true,allPicksPerMatch[match.id]);
+        const resolvedQrRN=(res.qr||null)?(res.qr).replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""):null;
+        const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,resolvedQrRN,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
         ptsPerMatch[match.id]=pts; okPerMatch[match.id]=ok;
         exPerMatch[match.id]=ex; qPtsPerMatch[match.id]=qOk;
