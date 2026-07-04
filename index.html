@@ -3481,7 +3481,11 @@ window.adminRecalcMatch = async function(btn){
           const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
           p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
         }
-        const {pts,ok,ex,qOk} = calcMatchPts(p,res.h,res.a,res.qr,rp,true,allPicksPerMatch[match.id]);
+        const rh3=(res.h90!=null)?res.h90:res.h;
+        const ra3=(res.a90!=null)?res.a90:res.a;
+        const resolvedQr3=(res.qr||null)?(res.qr).replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""):null;
+        if(p.extra) p={...p,extra:p.extra.replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||"")};
+        const {pts,ok,ex,qOk} = calcMatchPts(p,rh3,ra3,resolvedQr3,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex; totalQ+=qOk;
         ptsPerMatch[match.id] = pts;
         okPerMatch[match.id]  = ok;
