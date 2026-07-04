@@ -2914,8 +2914,13 @@ async function fetchLive(){
         liveCount++;
         // Try to auto-answer question in real time (provisional — may update again)
         const liveQr = await autoAnswerQuestion(ev.id, mid);
+        // Preserve h90/a90 once set — don't overwrite with ESPN data during extra time
+        const existingH90 = pollaLive.results?.[mid]?.h90;
+        const existingA90 = pollaLive.results?.[mid]?.a90;
+        const finalH90 = (existingH90!=null) ? existingH90 : h90;
+        const finalA90 = (existingA90!=null) ? existingA90 : a90;
         const liveUpdate = {
-          h, a, h90, a90, live:true, locked:false, min:Math.round(min/60)||0,
+          h, a, h90:finalH90, a90:finalA90, live:true, locked:false, min:Math.round(min/60)||0,
           homeTeam:homeName, awayTeam:awayName, espnId:ev.id
         };
         // Only set qr if not already manually set — don't overwrite admin corrections
@@ -2932,12 +2937,17 @@ async function fetchLive(){
           // Preserve any qr already set manually during the match — don't overwrite
           const existingQr = pollaLive.results?.[mid]?.qr;
           const finalQr = existingQr || qr || null;
+          // Preserve h90/a90 if already set — don't overwrite with post-extra-time data
+          const savedH90 = pollaLive.results?.[mid]?.h90;
+          const savedA90 = pollaLive.results?.[mid]?.a90;
+          const lockedH90 = (savedH90!=null) ? savedH90 : h90;
+          const lockedA90 = (savedA90!=null) ? savedA90 : a90;
           updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
-            h, a, h90, a90, live:false, locked:true,
+            h, a, h90:lockedH90, a90:lockedA90, live:false, locked:true,
             homeTeam:homeName, awayTeam:awayName, espnId:ev.id,
             ...(finalQr ? {qr: finalQr} : {})
           };
-          finishedWithQr.push({mid, h, a, h90, a90, qr: finalQr});
+          finishedWithQr.push({mid, h, a, h90:lockedH90, a90:lockedA90, qr: finalQr});
         }
       }
     }
@@ -3454,39 +3464,46 @@ window.adminSaveQr = async function(btn){
 
 // Recalculate points for a match from scratch (use to fix duplicated points)
 window.adminRecalcTotalsFromBreakdown = async function(btn){
-  if(!confirm("¿Recalcular los totales de puntos sumando directamente desde el desglose por partido guardado en Firebase?\n\nEsto NO recalcula nada — solo suma los pts de cada partido tal como están guardados y corrige el total.\n\n¿Continuar?")) return;
-  btn.textContent="Calculando..."; btn.disabled=true;
+  btn.textContent="⏳ Leyendo Firebase..."; btn.disabled=true;
   try{
+    if(!CUR.pollaId){ alert("Error: no hay polla activa (CUR.pollaId es null)"); btn.textContent="🔢 Recalcular totales desde desglose"; btn.disabled=false; return; }
     const membersSnap = await get(ref(db,`pollas/${CUR.pollaId}/members`));
-    if(!membersSnap.exists()){ btn.textContent="Sin miembros"; btn.disabled=false; return; }
+    if(!membersSnap.exists()){ alert("Error: no se encontraron miembros en Firebase"); btn.textContent="🔢 Recalcular totales desde desglose"; btn.disabled=false; return; }
     const members = membersSnap.val();
+    const numMembers = Object.keys(members).length;
+    btn.textContent=`⏳ Calculando ${numMembers} usuarios...`;
     const updates = {};
+    const log = [];
 
     Object.entries(members).forEach(([uid, mem])=>{
       const ptsPerMatch = mem.ptsPerMatch || {};
       const okPerMatch  = mem.okPerMatch  || {};
       const exPerMatch  = mem.exPerMatch  || {};
-
-      // Sum ALL matches from breakdown (both old system 1-24 and new system 25+)
       let totalPts = 0, totalOk = 0, totalEx = 0;
-      Object.values(ptsPerMatch).forEach(v=>{ totalPts += (v||0); });
-      Object.values(okPerMatch).forEach(v=>{  totalOk  += (v||0); });
-      Object.values(exPerMatch).forEach(v=>{  totalEx  += (v||0); });
-
-      // Add global prediction points if awarded
+      Object.values(ptsPerMatch).forEach(v=>{ totalPts += (Number(v)||0); });
+      Object.values(okPerMatch).forEach(v=>{  totalOk  += (Number(v)||0); });
+      Object.values(exPerMatch).forEach(v=>{  totalEx  += (Number(v)||0); });
       const globalPts = mem.globalPtsAwarded ? (mem.globalPts||0) : 0;
       totalPts += globalPts;
-
+      const oldPts = mem.pts||0;
+      log.push(`${mem.dname||uid}: ${oldPts} → ${totalPts}`);
       updates[`pollas/${CUR.pollaId}/members/${uid}/pts`] = totalPts;
       updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]  = totalOk;
       updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]  = totalEx;
     });
 
+    btn.textContent=`⏳ Escribiendo en Firebase...`;
     await update(ref(db,"/"), updates);
+    console.log("[RecalcBreakdown] Cambios aplicados: "+log.join(", "));
+    alert("Totales corregidos para "+numMembers+" usuarios. Ver consola F12 para detalle.");
+
+
     btn.textContent="✅ Totales corregidos";
     setTimeout(()=>{ btn.textContent="🔢 Recalcular totales desde desglose"; btn.disabled=false; }, 3000);
   } catch(e){
-    btn.textContent="⚠️ Error: "+e.message;
+    console.error("[RecalcBreakdown] Error:", e);
+    alert("⚠️ Error: "+e.message);
+    btn.textContent="⚠️ Error";
     btn.disabled=false;
   }
 };
