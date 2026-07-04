@@ -3269,17 +3269,25 @@ function calcMatchPts(p, rh, ra, qr, rp, isNewSystem, allPicks){
   return {pts, ok, ex, qOk, cat};
 }
 
+const _calcPointsLock = new Set();
 async function calcPoints(matchId,rh,ra,qr){
+  // In-memory lock to prevent race condition double execution
+  if(_calcPointsLock.has(matchId)){
+    console.log(`calcPoints: match ${matchId} already running, skipping.`);
+    return;
+  }
+  _calcPointsLock.add(matchId);
+  try{
   const [membersSnap, resultSnap] = await Promise.all([
     get(ref(db,`pollas/${CUR.pollaId}/members`)),
     get(ref(db,`pollas/${CUR.pollaId}/results/${matchId}`))
   ]);
-  if(!membersSnap.exists()) return;
+  if(!membersSnap.exists()){ _calcPointsLock.delete(matchId); return; }
   const members = membersSnap.val();
   const resultData = resultSnap.exists() ? resultSnap.val() : {};
   if(resultData.ptsAwarded){
     console.log(`calcPoints: match ${matchId} already awarded, skipping.`);
-    return;
+    _calcPointsLock.delete(matchId); return;
   }
   const m = MATCHES.find(x=>x.id===matchId); if(!m) return;
   const isNewSystem = matchId >= NEW_SYSTEM_FROM_MATCH;
@@ -3312,6 +3320,7 @@ async function calcPoints(matchId,rh,ra,qr){
   if(Object.keys(updates).length) await update(ref(db,"/"),updates);
   if(matchId===SNAPSHOT_MATCH) setTimeout(()=>{ savePointsSnapshot(); }, 2000);
   setTimeout(()=>{ checkpointScorers(); }, 3000);
+  } finally { _calcPointsLock.delete(matchId); }
 }
 
 async function savePointsSnapshot(){
@@ -3376,9 +3385,25 @@ window.adminSaveQr = async function(btn){
     const snapshotSnap = await get(ref(db,`pollas/${CUR.pollaId}/pointsSnapshot`));
     const snapshot = snapshotSnap.exists() ? snapshotSnap.val() : null;
     const newSystemMatches = finalized.filter(x=>x.id>=NEW_SYSTEM_FROM_MATCH);
+    // Build resolvedPicksPerMatch INCLUDING random picks for correct "resultado único" check
+    const resolvedPicksPerMatchSQ = {};
+    newSystemMatches.forEach(match=>{
+      const pickMap = {};
+      Object.entries(members).forEach(([uid,mem])=>{
+        let p = mem.picks?.[match.id];
+        if(!p||p.h==null){
+          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
+        } else if(p.extra){
+          p={...p,extra:p.extra.replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||"")};
+        }
+        pickMap[uid]=p;
+      });
+      resolvedPicksPerMatchSQ[match.id]=pickMap;
+    });
     const allPicksPerMatch = {};
     newSystemMatches.forEach(match=>{
-      allPicksPerMatch[match.id] = Object.values(members).map(mem=>mem.picks?.[match.id]).filter(p=>p&&p.h!=null);
+      allPicksPerMatch[match.id] = Object.values(resolvedPicksPerMatchSQ[match.id]);
     });
     Object.entries(members).forEach(([uid, mem])=>{
       const base = snapshot?.[uid] || {pts:0,ok:0,ex:0};
@@ -3393,14 +3418,11 @@ window.adminSaveQr = async function(btn){
       newSystemMatches.forEach(match=>{
         const res = results[match.id];
         const rp = PTS_NEW[match.r]||PTS_NEW.g;
-        let p = mem.picks?.[match.id];
-        if(!p||p.h==null){
-          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
-        }
+        const p = resolvedPicksPerMatchSQ[match.id][uid];
         const rh3=(res.h90!=null)?res.h90:res.h;
         const ra3=(res.a90!=null)?res.a90:res.a;
-        const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,res.qr,rp,true,allPicksPerMatch[match.id]);
+        const resolvedQrSQ=(res.qr||null)?(res.qr).replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""):null;
+        const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,resolvedQrSQ,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
         ptsPerMatch[match.id]  = pts;
         okPerMatch[match.id]   = ok;
@@ -3453,9 +3475,25 @@ window.adminRecalcMatch = async function(btn){
 
     // Only recalculate matches from new system onwards
     const newSystemMatches = finalized.filter(m=>m.id>=NEW_SYSTEM_FROM_MATCH);
+    // Build allPicksPerMatch INCLUDING random picks for correct "resultado único" check
+    const resolvedPicksPerMatch = {}; // mid -> {uid -> pick}
+    newSystemMatches.forEach(match=>{
+      const pickMap = {};
+      Object.entries(members).forEach(([uid,mem])=>{
+        let p = mem.picks?.[match.id];
+        if(!p||p.h==null){
+          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
+        } else if(p.extra){
+          p={...p,extra:p.extra.replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||"")};
+        }
+        pickMap[uid]=p;
+      });
+      resolvedPicksPerMatch[match.id]=pickMap;
+    });
     const allPicksPerMatch = {};
     newSystemMatches.forEach(match=>{
-      allPicksPerMatch[match.id] = Object.values(members).map(mem=>mem.picks?.[match.id]).filter(p=>p&&p.h!=null);
+      allPicksPerMatch[match.id] = Object.values(resolvedPicksPerMatch[match.id]);
     });
 
     Object.entries(members).forEach(([uid, mem])=>{
@@ -3476,15 +3514,10 @@ window.adminRecalcMatch = async function(btn){
       newSystemMatches.forEach(match => {
         const res = results[match.id];
         const rp = PTS_NEW[match.r]||PTS_NEW.g;
-        let p = mem.picks?.[match.id];
-        if(!p||p.h==null){
-          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
-        }
+        const p = resolvedPicksPerMatch[match.id][uid];
         const rh3=(res.h90!=null)?res.h90:res.h;
         const ra3=(res.a90!=null)?res.a90:res.a;
         const resolvedQr3=(res.qr||null)?(res.qr).replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""):null;
-        if(p.extra) p={...p,extra:p.extra.replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||"")};
         const {pts,ok,ex,qOk} = calcMatchPts(p,rh3,ra3,resolvedQr3,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex; totalQ+=qOk;
         ptsPerMatch[match.id] = pts;
