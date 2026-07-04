@@ -4110,10 +4110,18 @@ function renderMultiPollaPanel(pollaData){
     const anyLive = statuses.some(x=>x==='live');
     const overallStatus = allLocked ? '🔒 Cerrado' : anyLive ? '🔴 En vivo' : '⏳ Abierto';
     const overallCls = allLocked ? 'locked' : anyLive ? 'live' : 'open';
+    // Resolve real team names and flags for knockout rounds
+    const _mpR = pollaData[0]?.results[m.id]||{};
+    const _mpH = resolveKnockoutSlot(m.home);
+    const _mpA = resolveKnockoutSlot(m.away);
+    const mpHome = (_mpR.homeTeam&&!_mpR.homeTeam.startsWith("Gan.")&&!_mpR.homeTeam.startsWith("Per.")&&!_mpR.homeTeam.includes("TBD"))?_mpR.homeTeam:(_mpH.name!==m.home?_mpH.name:m.home);
+    const mpAway = (_mpR.awayTeam&&!_mpR.awayTeam.startsWith("Gan.")&&!_mpR.awayTeam.startsWith("Per.")&&!_mpR.awayTeam.includes("TBD"))?_mpR.awayTeam:(_mpA.name!==m.away?_mpA.name:m.away);
+    const mpHf = _mpH.flag||getTeamFlag(mpHome)||m.hf;
+    const mpAf = _mpA.flag||getTeamFlag(mpAway)||m.af;
     html += `<div class="mp-match-row">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--t1)">${m.hf} ${m.home} vs ${m.away} ${m.af}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--t1)">${mpHf} ${mpHome} vs ${mpAway} ${mpAf}</div>
           <div style="font-size:11px;color:var(--t3);margin-top:1px">${m.date} · ${m.time}</div>
         </div>
         <span class="mp-status ${overallCls}">${overallStatus}</span>
@@ -4135,13 +4143,13 @@ function renderMultiPollaPanel(pollaData){
       ${s.h===s.a ? `<div id="mp-winner-sel-${m.id}" style="background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:8px 10px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏆 Empate — ¿Quién ganó en prórroga/penales?</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="obtn${s.winner===m.home?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.home.replace(/'/g,"'")}',this)">${m.home}</button>
-          <button class="obtn${s.winner===m.away?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.away.replace(/'/g,"'")}',this)">${m.away}</button>
+          <button class="obtn${s.winner===mpHome?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${mpHome.replace(/'/g,"'")}',this)">${mpHome}</button>
+          <button class="obtn${s.winner===mpAway?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${mpAway.replace(/'/g,"'")}',this)">${mpAway}</button>
         </div>
       </div>` : ''}
-      <div class="mp-extra-q">${m.q.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)}</div>
+      <div class="mp-extra-q">${m.q.replace(/__HOME__/g,mpHome).replace(/__AWAY__/g,mpAway)}</div>
       <div class="mp-extra-opts" id="mp-opts-${m.id}" style="margin-top:4px;margin-bottom:8px">
-        ${m.opts.map(o=>{const ol=o.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away);return`<button class="obtn${s.extra===ol?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${ol.replace(/'/g,"'")}',this)">${ol}</button>`;}).join('')}
+        ${m.opts.map(o=>{const ol=o.replace(/__HOME__/g,mpHome).replace(/__AWAY__/g,mpAway);return`<button class="obtn${s.extra===ol?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${ol.replace(/'/g,"'")}',this)">${ol}</button>`;}).join('')}
       </div>
       <div style="background:var(--bg);border-radius:var(--rs);padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--t2)">
         Se aplica a: <strong>${pollaNames.join(' · ')}</strong>
@@ -4154,8 +4162,8 @@ function renderMultiPollaPanel(pollaData){
       <div id="mp-winner-sel-${m.id}" style="background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:8px 10px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏆 Partido cerrado en empate — ¿Quién ganó en prórroga/penales?</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-          <button class="obtn${s.winner===m.home?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.home.replace(/'/g,"'")}',this)">${m.home}</button>
-          <button class="obtn${s.winner===m.away?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.away.replace(/'/g,"'")}',this)">${m.away}</button>
+          <button class="obtn${s.winner===mpHome?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${mpHome.replace(/'/g,"'")}',this)">${mpHome}</button>
+          <button class="obtn${s.winner===mpAway?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${mpAway.replace(/'/g,"'")}',this)">${mpAway}</button>
         </div>
         <button class="mp-act-btn" style="width:100%;background:var(--gd);color:#fff;padding:8px" onclick="mpSaveWinnerOnly(${m.id},window._mpPollaData,this)">💾 Guardar ganador (no toca puntos)</button>
       </div>
