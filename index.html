@@ -683,6 +683,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <button class="sbtn full" style="background:var(--t2);margin-bottom:8px" onclick="adminRecalcOld(this)">🔁 Recalcular sistema viejo (partidos 1–24)</button>
         <div style="font-size:12px;color:var(--t2);margin-bottom:6px">Recalcula solo los partidos del sistema nuevo (25+) sumando encima del snapshot.</div>
         <button class="sbtn full" style="background:var(--rd)" onclick="adminRecalcNew(this)">🔁 Recalcular sistema nuevo (partidos 25+)</button>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:6px;margin-top:8px">Suma directamente desde el desglose guardado. Corrige el total sin recalcular nada.</div>
+        <button class="sbtn full" style="background:#1a56db" onclick="adminRecalcTotalsFromBreakdown(this)">🔢 Recalcular totales desde desglose</button>
       </div>
       <div class="slbl">Eliminar polla</div>
       <div class="card">
@@ -3449,6 +3451,44 @@ window.adminSaveQr = async function(btn){
 };
 
 // Recalculate points for a match from scratch (use to fix duplicated points)
+window.adminRecalcTotalsFromBreakdown = async function(btn){
+  if(!confirm("¿Recalcular los totales de puntos sumando directamente desde el desglose por partido guardado en Firebase?\n\nEsto NO recalcula nada — solo suma los pts de cada partido tal como están guardados y corrige el total.\n\n¿Continuar?")) return;
+  btn.textContent="Calculando..."; btn.disabled=true;
+  try{
+    const membersSnap = await get(ref(db,`pollas/${CUR.pollaId}/members`));
+    if(!membersSnap.exists()){ btn.textContent="Sin miembros"; btn.disabled=false; return; }
+    const members = membersSnap.val();
+    const updates = {};
+
+    Object.entries(members).forEach(([uid, mem])=>{
+      const ptsPerMatch = mem.ptsPerMatch || {};
+      const okPerMatch  = mem.okPerMatch  || {};
+      const exPerMatch  = mem.exPerMatch  || {};
+
+      // Sum ALL matches from breakdown (both old system 1-24 and new system 25+)
+      let totalPts = 0, totalOk = 0, totalEx = 0;
+      Object.values(ptsPerMatch).forEach(v=>{ totalPts += (v||0); });
+      Object.values(okPerMatch).forEach(v=>{  totalOk  += (v||0); });
+      Object.values(exPerMatch).forEach(v=>{  totalEx  += (v||0); });
+
+      // Add global prediction points if awarded
+      const globalPts = mem.globalPtsAwarded ? (mem.globalPts||0) : 0;
+      totalPts += globalPts;
+
+      updates[`pollas/${CUR.pollaId}/members/${uid}/pts`] = totalPts;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]  = totalOk;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]  = totalEx;
+    });
+
+    await update(ref(db,"/"), updates);
+    btn.textContent="✅ Totales corregidos";
+    setTimeout(()=>{ btn.textContent="🔢 Recalcular totales desde desglose"; btn.disabled=false; }, 3000);
+  } catch(e){
+    btn.textContent="⚠️ Error: "+e.message;
+    btn.disabled=false;
+  }
+};
+
 window.adminRecalcMatch = async function(btn){
   // No match selection needed — recalculates ALL finalized matches from scratch
   if(!confirm(`⚠️ Esto recalcula los puntos de TODOS los partidos finalizados desde cero.\n\nSirve para corregir puntos incorrectos o duplicados.\n\n¿Continuar?`)) return;
