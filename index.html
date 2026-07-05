@@ -1508,22 +1508,23 @@ function resolveKnockoutSlot(slot){
     return{name:slot,flag:null};
   }
   // Resolve Gan.PXX (winner) and Per.PXX (loser) from a previous match result
+  // Resolves recursively if homeTeam/awayTeam are themselves slots (e.g. Gan.P74)
   const mGan=slot.match(/^Gan\.P(\d+)$/);
   if(mGan){
     const mid=parseInt(mGan[1]),r=results[mid];
     if(r?.locked&&r.h!=null&&r.a!=null){
-      // Try winner field first, then homeTeam/awayTeam, then fallback to MATCH home/away
-      const m=MATCHES.find(x=>x.id===mid);
-      const hName=r.homeTeam&&!r.homeTeam.startsWith("Gan.")&&!r.homeTeam.startsWith("Per.")&&!r.homeTeam.startsWith("1°")&&!r.homeTeam.startsWith("2°")&&!r.homeTeam.startsWith("3°")?r.homeTeam:m?.home;
-      const aName=r.awayTeam&&!r.awayTeam.startsWith("Gan.")&&!r.awayTeam.startsWith("Per.")&&!r.awayTeam.startsWith("1°")&&!r.awayTeam.startsWith("2°")&&!r.awayTeam.startsWith("3°")?r.awayTeam:m?.away;
-      const winner=r.winner||(r.h>r.a?hName:r.a>r.h?aName:null);
-      if(winner)return{name:winner,flag:getTeamFlag(winner)||null};
-    }
-    // Match not yet played — try resolving from MATCH definition
-    const m=MATCHES.find(x=>x.id===parseInt(mGan[1]));
-    if(m&&m.home&&!m.home.startsWith("Gan.")&&!m.home.startsWith("Per.")){
-      // MATCH has real team names already defined
-      return{name:m.home,flag:m.hf||getTeamFlag(m.home)||null};
+      const resolveRaw=(raw)=>{
+        if(!raw)return null;
+        if(raw.startsWith("Gan.")||raw.startsWith("Per.")){
+          const rec=resolveKnockoutSlot(raw);
+          return rec.name!==raw?rec.name:null;
+        }
+        return raw;
+      };
+      const hName=resolveRaw(r.homeTeam)||r.homeTeam;
+      const aName=resolveRaw(r.awayTeam)||r.awayTeam;
+      const winner=r.winner?resolveRaw(r.winner)||r.winner:(r.h>r.a?hName:r.a>r.h?aName:null);
+      if(winner&&!winner.startsWith("Gan.")&&!winner.startsWith("Per."))return{name:winner,flag:getTeamFlag(winner)||null};
     }
     return{name:slot,flag:null};
   }
@@ -1531,12 +1532,19 @@ function resolveKnockoutSlot(slot){
   if(mPer){
     const mid=parseInt(mPer[1]),r=results[mid];
     if(r?.locked&&r.h!=null&&r.a!=null){
-      const m=MATCHES.find(x=>x.id===mid);
-      const hName=r.homeTeam&&!r.homeTeam.startsWith("Gan.")&&!r.homeTeam.startsWith("Per.")?r.homeTeam:m?.home;
-      const aName=r.awayTeam&&!r.awayTeam.startsWith("Gan.")&&!r.awayTeam.startsWith("Per.")?r.awayTeam:m?.away;
-      const winner=r.winner||(r.h>r.a?hName:r.a>r.h?hName:null);
-      const loser=winner?(winner===hName?aName:hName):null;
-      if(loser)return{name:loser,flag:getTeamFlag(loser)||null};
+      const resolveRaw=(raw)=>{
+        if(!raw)return null;
+        if(raw.startsWith("Gan.")||raw.startsWith("Per.")){
+          const rec=resolveKnockoutSlot(raw);
+          return rec.name!==raw?rec.name:null;
+        }
+        return raw;
+      };
+      const hName=resolveRaw(r.homeTeam)||r.homeTeam;
+      const aName=resolveRaw(r.awayTeam)||r.awayTeam;
+      const wRaw=r.winner?resolveRaw(r.winner)||r.winner:(r.h>r.a?hName:r.a>r.h?hName:null);
+      const loser=wRaw?(wRaw===hName?aName:hName):null;
+      if(loser&&!loser.startsWith("Gan.")&&!loser.startsWith("Per."))return{name:loser,flag:getTeamFlag(loser)||null};
     }
     return{name:slot,flag:null};
   }
@@ -1559,10 +1567,8 @@ function buildCard(m,result){
   const r0=pollaLive.results?.[m.id];
   const homeDisplay = (m.ph!=="Grupos"&&r0?.homeTeam&&!r0.homeTeam.includes("TBD")) ? r0.homeTeam : (m.ph!=="Grupos" ? resolveKnockoutSlot(m.home).name : m.home);
   const awayDisplay = (m.ph!=="Grupos"&&r0?.awayTeam&&!r0.awayTeam.includes("TBD")) ? r0.awayTeam : (m.ph!=="Grupos" ? resolveKnockoutSlot(m.away).name : m.away);
-  const _hSlot = m.ph!=="Grupos" ? resolveKnockoutSlot(m.home) : null;
-  const _aSlot = m.ph!=="Grupos" ? resolveKnockoutSlot(m.away) : null;
-  const homeFlagR = m.ph!=="Grupos" ? (_hSlot.flag||getTeamFlag(homeDisplay)||m.hf) : m.hf;
-  const awayFlagR = m.ph!=="Grupos" ? (_aSlot.flag||getTeamFlag(awayDisplay)||m.af) : m.af;
+  const homeFlagR = m.ph!=="Grupos" ? (resolveKnockoutSlot(m.home).flag||m.hf) : m.hf;
+  const awayFlagR = m.ph!=="Grupos" ? (resolveKnockoutSlot(m.away).flag||m.af) : m.af;
   const myPick=myPicks[m.id]||{h:0,a:0,extra:null};
   if(!localScores[m.id]) localScores[m.id]={h:myPick.h||0,a:myPick.a||0};
   const sh=localScores[m.id].h, sa=localScores[m.id].a;
@@ -1674,7 +1680,13 @@ function buildCard(m,result){
 }
 
 function openMatchModal(m,result,picks){
-  document.getElementById("mm-title").textContent=`${m.hf} ${m.home} ${result.h}–${result.a} ${m.away} ${m.af}`;
+  const _mmH=m.ph!=="Grupos"?resolveKnockoutSlot(m.home):{name:m.home,flag:m.hf};
+  const _mmA=m.ph!=="Grupos"?resolveKnockoutSlot(m.away):{name:m.away,flag:m.af};
+  const mmHome=(result?.homeTeam&&!result.homeTeam.startsWith("Gan.")&&!result.homeTeam.includes("TBD"))?result.homeTeam:(_mmH.name!==m.home?_mmH.name:m.home);
+  const mmAway=(result?.awayTeam&&!result.awayTeam.startsWith("Gan.")&&!result.awayTeam.includes("TBD"))?result.awayTeam:(_mmA.name!==m.away?_mmA.name:m.away);
+  const mmHf=_mmH.flag||getTeamFlag(mmHome)||m.hf;
+  const mmAf=_mmA.flag||getTeamFlag(mmAway)||m.af;
+  document.getElementById("mm-title").textContent=`${mmHf} ${mmHome} ${result.h}–${result.a} ${mmAway} ${mmAf}`;
   const rp=PTS[m.r]||PTS_DEF.g;
   const rows=picks.map(o=>{
     const [ph,pa]=o.s.split("-").map(Number);
@@ -1782,22 +1794,17 @@ function renderLive(){
     const r=results[m.id];
     const isNew = m.id >= NEW_SYSTEM_FROM_MATCH;
     const rp = isNew ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
-    // Resolve real names early so picks/qr use them
-    const _hResE = m.ph!=="Grupos" ? resolveKnockoutSlot(m.home) : {name:m.home,flag:m.hf};
-    const _aResE = m.ph!=="Grupos" ? resolveKnockoutSlot(m.away) : {name:m.away,flag:m.af};
-    const homeReal=(m.ph!=="Grupos"&&r?.homeTeam&&!r.homeTeam.includes("TBD")&&!r.homeTeam.startsWith("Gan.")&&!r.homeTeam.startsWith("Per."))?r.homeTeam:_hResE.name!==m.home?_hResE.name:m.home;
-    const awayReal=(m.ph!=="Grupos"&&r?.awayTeam&&!r.awayTeam.includes("TBD")&&!r.awayTeam.startsWith("Gan.")&&!r.awayTeam.startsWith("Per."))?r.awayTeam:_aResE.name!==m.away?_aResE.name:m.away;
     const allMemberPicks = Object.values(pollaLive.members||{}).map(mem=>mem.picks?.[m.id]).filter(p=>p&&p.h!=null);
     const picks=Object.entries(pollaLive.members||{}).map(([uid,mem])=>{
       let p=mem.picks?.[m.id];
       if(!p||(!p.h&&!p.a&&!p.extra)){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,homeReal).replace(/__AWAY__/g,awayReal),isRandom:true};
+        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
       } else if(p.extra){
         // Resolve any __HOME__/__AWAY__ stored in Firebase from before the fix
-        p={...p,extra:p.extra.replace(/__HOME__/g,homeReal).replace(/__AWAY__/g,awayReal)};
+        p={...p,extra:p.extra.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)};
       }
-      const resolvedQr = (r.qr||null) ? (r.qr).replace(/__HOME__/g,homeReal).replace(/__AWAY__/g,awayReal) : null;
+      const resolvedQr = (r.qr||null) ? (r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away) : null;
       // 16avos: usar marcador a 90min; Octavos+: marcador final (incl. prórroga)
       const rh = (r.h90!=null) ? r.h90 : r.h;
       const ra = (r.a90!=null) ? r.a90 : r.a;
@@ -1820,13 +1827,8 @@ function renderLive(){
     }).join("");
     let picksBlock = "";
     if(picks.length) picksBlock = '<div class="rcard"><div class="rtitle" style="margin-bottom:6px">📊 Pronósticos · puntos si termina así</div>' + oh + '</div>';
-    // Resolve real team names for knockout rounds
-    const _hRes = m.ph!=="Grupos" ? resolveKnockoutSlot(m.home) : {name:m.home,flag:m.hf};
-    const _aRes = m.ph!=="Grupos" ? resolveKnockoutSlot(m.away) : {name:m.away,flag:m.af};
-    const homeDisplay=(m.ph!=="Grupos"&&r?.homeTeam&&!r.homeTeam.includes("TBD")&&!r.homeTeam.startsWith("Gan.")&&!r.homeTeam.startsWith("Per."))?r.homeTeam:_hRes.name!==m.home?_hRes.name:m.home;
-    const awayDisplay=(m.ph!=="Grupos"&&r?.awayTeam&&!r.awayTeam.includes("TBD")&&!r.awayTeam.startsWith("Gan.")&&!r.awayTeam.startsWith("Per."))?r.awayTeam:_aRes.name!==m.away?_aRes.name:m.away;
-    const homeFlagLive = _hRes.flag||getTeamFlag(homeDisplay)||m.hf;
-    const awayFlagLive = _aRes.flag||getTeamFlag(awayDisplay)||m.af;
+    const homeDisplay=(m.ph!=="Grupos"&&r?.homeTeam&&!r.homeTeam.includes("TBD"))?r.homeTeam:m.home;
+    const awayDisplay=(m.ph!=="Grupos"&&r?.awayTeam&&!r.awayTeam.includes("TBD"))?r.awayTeam:m.away;
     const div=document.createElement("div"); div.className="live-card";
     div.innerHTML=`<div class="mmeta"><span class="mmeta-l"><span class="live-dot"></span>En vivo${r.min?" · "+r.min+"'":""}</span><span class="rbadge rb-g">${m.ph}</span></div>
     <div class="mrow">
@@ -1864,6 +1866,13 @@ function renderMyPicks(){
     const r=results[m.id];
     const isNew = m.id >= NEW_SYSTEM_FROM_MATCH;
     const rp = isNew ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
+    // Resolve real team names and flags for knockout rounds
+    const _mpH2 = m.ph!=="Grupos" ? resolveKnockoutSlot(m.home) : {name:m.home,flag:m.hf};
+    const _mpA2 = m.ph!=="Grupos" ? resolveKnockoutSlot(m.away) : {name:m.away,flag:m.af};
+    const homeDisplay2 = (r?.homeTeam&&!r.homeTeam.startsWith("Gan.")&&!r.homeTeam.startsWith("Per.")&&!r.homeTeam.includes("TBD"))?r.homeTeam:(_mpH2.name!==m.home?_mpH2.name:m.home);
+    const awayDisplay2 = (r?.awayTeam&&!r.awayTeam.startsWith("Gan.")&&!r.awayTeam.startsWith("Per.")&&!r.awayTeam.includes("TBD"))?r.awayTeam:(_mpA2.name!==m.away?_mpA2.name:m.away);
+    const homeFlagR2 = _mpH2.flag||getTeamFlag(homeDisplay2)||m.hf;
+    const awayFlagR2 = _mpA2.flag||getTeamFlag(awayDisplay2)||m.af;
     const members=pollaLive.members||{};
     // Build all resolved picks (including random) for resultado único check
     const resolvedPicksMap = {};
@@ -1871,7 +1880,7 @@ function renderMyPicks(){
       let p=mem.picks?.[m.id];
       if(!p||p.h==null){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
+        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,homeDisplay2).replace(/__AWAY__/g,awayDisplay2),isRandom:true};
       }
       resolvedPicksMap[uid]=p;
     });
@@ -1879,9 +1888,7 @@ function renderMyPicks(){
     // Build all picks for this match using new system
     const allPicks=Object.entries(members).map(([uid,mem])=>{
       const p=resolvedPicksMap[uid];
-      const rh_mp=(r.h90!=null)?r.h90:r.h;
-      const ra_mp=(r.a90!=null)?r.a90:r.a;
-      const {pts,ok,ex,qOk,cat}=calcMatchPts(p,rh_mp,ra_mp,r.qr?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):null,rp,isNew,allResolvedPicks);
+      const {pts,ok,ex,qOk,cat}=calcMatchPts(p,r.h90!=null?r.h90:r.h,r.a90!=null?r.a90:r.a,r.qr?(r.qr).replace(/__HOME__/g,homeDisplay2).replace(/__AWAY__/g,awayDisplay2):null,rp,isNew,allResolvedPicks);
       const exact=p.h===r.h&&p.a===r.a;
       const winOk=(p.h>p.a&&r.h>r.a)||(p.h<p.a&&r.h<r.a)||(p.h===p.a&&r.h===r.a);
       return{n:mem.dname||"?",p,pts:pts||0,exact,winOk,qOk,cat,me:uid===CUR.uid};
@@ -1916,14 +1923,14 @@ function renderMyPicks(){
     return`<div class="pick-card" onclick="this.querySelector('.pick-body').classList.toggle('open')">
       <div class="pick-hdr">
         <div style="flex:1;min-width:0">
-          <div class="pick-teams">${m.hf} ${m.home} ${r.h}–${r.a} ${m.away} ${m.af}</div>
+          <div class="pick-teams">${homeFlagR2} ${homeDisplay2} ${r.h90!=null?r.h90:r.h}–${r.a90!=null?r.a90:r.a} ${awayDisplay2} ${awayFlagR2}</div>
           <div style="margin-top:6px">
             <span style="background:${resultBg};border:0.5px solid ${resultBorder};color:${resultColor};font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px">${resultLabel} · ${myScore}</span>
           </div>
           <div class="pick-date" style="color:var(--t3);margin-top:6px">${m.q}</div>
           <div class="pick-date" style="margin-top:2px">
             Tu resp: <span style="color:${myQOk?"#16a34a":"var(--t2)"};font-weight:${myQOk?"600":"400"}">${myExtra}</span>
-            · Correcta: <span style="color:#16a34a;font-weight:600">${r.qr?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):"pendiente"}</span>
+            · Correcta: <span style="color:#16a34a;font-weight:600">${r.qr?(r.qr).replace(/__HOME__/g,homeDisplay2).replace(/__AWAY__/g,awayDisplay2):"pendiente"}</span>
           </div>
         </div>
         <div class="pick-pts ${ptsCls}">+${myPts}pts</div>
@@ -2147,8 +2154,13 @@ function buildCruces(){
       const mid=parseInt(mGan[1]),r=results[mid];
       if(r?.locked&&r.h!=null&&r.a!=null){
         // Si hay empate con ganador manual (prórroga/penales), usar ese
-        const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null);
-        if(winner)return{name:winner,flag:getTeamFlag(winner)||"🏳️"};
+        let rawWinner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null);
+        // Si el homeTeam/awayTeam es otro slot (Gan.PXX), resolver recursivamente
+        if(rawWinner&&(rawWinner.startsWith("Gan.")||rawWinner.startsWith("Per."))){
+          const resolved=resolveSlot(rawWinner);
+          if(resolved.name!==rawWinner)return resolved;
+        }
+        if(rawWinner)return{name:rawWinner,flag:getTeamFlag(rawWinner)||"🏳️"};
       }
       return{name:slot,flag:"🏳️"};
     }
@@ -2157,9 +2169,14 @@ function buildCruces(){
       const mid=parseInt(mPer[1]),r=results[mid];
       if(r?.locked&&r.h!=null&&r.a!=null){
         // El perdedor es el que no es el winner
-        const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.homeTeam:null);
-        const loser=winner?(winner===r.homeTeam?r.awayTeam:r.homeTeam):null;
-        if(loser)return{name:loser,flag:getTeamFlag(loser)||"🏳️"};
+        const wRaw=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.homeTeam:null);
+        let rawLoser=wRaw?(wRaw===r.homeTeam?r.awayTeam:r.homeTeam):null;
+        // Resolver recursivamente si es otro slot
+        if(rawLoser&&(rawLoser.startsWith("Gan.")||rawLoser.startsWith("Per."))){
+          const resolved=resolveSlot(rawLoser);
+          if(resolved.name!==rawLoser)return resolved;
+        }
+        if(rawLoser)return{name:rawLoser,flag:getTeamFlag(rawLoser)||"🏳️"};
       }
       return{name:slot,flag:"🏳️"};
     }
@@ -2939,13 +2956,8 @@ async function fetchLive(){
         liveCount++;
         // Try to auto-answer question in real time (provisional — may update again)
         const liveQr = await autoAnswerQuestion(ev.id, mid);
-        // Preserve h90/a90 once set — don't overwrite with ESPN data during extra time
-        const existingH90 = pollaLive.results?.[mid]?.h90;
-        const existingA90 = pollaLive.results?.[mid]?.a90;
-        const finalH90 = (existingH90!=null) ? existingH90 : h90;
-        const finalA90 = (existingA90!=null) ? existingA90 : a90;
         const liveUpdate = {
-          h, a, h90:finalH90, a90:finalA90, live:true, locked:false, min:Math.round(min/60)||0,
+          h, a, h90, a90, live:true, locked:false, min:Math.round(min/60)||0,
           homeTeam:homeName, awayTeam:awayName, espnId:ev.id
         };
         // Only set qr if not already manually set — don't overwrite admin corrections
@@ -2962,17 +2974,12 @@ async function fetchLive(){
           // Preserve any qr already set manually during the match — don't overwrite
           const existingQr = pollaLive.results?.[mid]?.qr;
           const finalQr = existingQr || qr || null;
-          // Preserve h90/a90 if already set — don't overwrite with post-extra-time data
-          const savedH90 = pollaLive.results?.[mid]?.h90;
-          const savedA90 = pollaLive.results?.[mid]?.a90;
-          const lockedH90 = (savedH90!=null) ? savedH90 : h90;
-          const lockedA90 = (savedA90!=null) ? savedA90 : a90;
           updates[`pollas/${CUR.pollaId}/results/${mid}`] = {
-            h, a, h90:lockedH90, a90:lockedA90, live:false, locked:true,
+            h, a, h90, a90, live:false, locked:true,
             homeTeam:homeName, awayTeam:awayName, espnId:ev.id,
             ...(finalQr ? {qr: finalQr} : {})
           };
-          finishedWithQr.push({mid, h, a, h90:lockedH90, a90:lockedA90, qr: finalQr});
+          finishedWithQr.push({mid, h, a, h90, a90, qr: finalQr});
         }
       }
     }
@@ -3489,46 +3496,39 @@ window.adminSaveQr = async function(btn){
 
 // Recalculate points for a match from scratch (use to fix duplicated points)
 window.adminRecalcTotalsFromBreakdown = async function(btn){
-  btn.textContent="⏳ Leyendo Firebase..."; btn.disabled=true;
+  if(!confirm("¿Recalcular los totales de puntos sumando directamente desde el desglose por partido guardado en Firebase?\n\nEsto NO recalcula nada — solo suma los pts de cada partido tal como están guardados y corrige el total.\n\n¿Continuar?")) return;
+  btn.textContent="Calculando..."; btn.disabled=true;
   try{
-    if(!CUR.pollaId){ alert("Error: no hay polla activa (CUR.pollaId es null)"); btn.textContent="🔢 Recalcular totales desde desglose"; btn.disabled=false; return; }
     const membersSnap = await get(ref(db,`pollas/${CUR.pollaId}/members`));
-    if(!membersSnap.exists()){ alert("Error: no se encontraron miembros en Firebase"); btn.textContent="🔢 Recalcular totales desde desglose"; btn.disabled=false; return; }
+    if(!membersSnap.exists()){ btn.textContent="Sin miembros"; btn.disabled=false; return; }
     const members = membersSnap.val();
-    const numMembers = Object.keys(members).length;
-    btn.textContent=`⏳ Calculando ${numMembers} usuarios...`;
     const updates = {};
-    const log = [];
 
     Object.entries(members).forEach(([uid, mem])=>{
       const ptsPerMatch = mem.ptsPerMatch || {};
       const okPerMatch  = mem.okPerMatch  || {};
       const exPerMatch  = mem.exPerMatch  || {};
+
+      // Sum ALL matches from breakdown (both old system 1-24 and new system 25+)
       let totalPts = 0, totalOk = 0, totalEx = 0;
-      Object.values(ptsPerMatch).forEach(v=>{ totalPts += (Number(v)||0); });
-      Object.values(okPerMatch).forEach(v=>{  totalOk  += (Number(v)||0); });
-      Object.values(exPerMatch).forEach(v=>{  totalEx  += (Number(v)||0); });
+      Object.values(ptsPerMatch).forEach(v=>{ totalPts += (v||0); });
+      Object.values(okPerMatch).forEach(v=>{  totalOk  += (v||0); });
+      Object.values(exPerMatch).forEach(v=>{  totalEx  += (v||0); });
+
+      // Add global prediction points if awarded
       const globalPts = mem.globalPtsAwarded ? (mem.globalPts||0) : 0;
       totalPts += globalPts;
-      const oldPts = mem.pts||0;
-      log.push(`${mem.dname||uid}: ${oldPts} → ${totalPts}`);
+
       updates[`pollas/${CUR.pollaId}/members/${uid}/pts`] = totalPts;
       updates[`pollas/${CUR.pollaId}/members/${uid}/ok`]  = totalOk;
       updates[`pollas/${CUR.pollaId}/members/${uid}/ex`]  = totalEx;
     });
 
-    btn.textContent=`⏳ Escribiendo en Firebase...`;
     await update(ref(db,"/"), updates);
-    console.log("[RecalcBreakdown] Cambios aplicados: "+log.join(", "));
-    alert("Totales corregidos para "+numMembers+" usuarios. Ver consola F12 para detalle.");
-
-
     btn.textContent="✅ Totales corregidos";
     setTimeout(()=>{ btn.textContent="🔢 Recalcular totales desde desglose"; btn.disabled=false; }, 3000);
   } catch(e){
-    console.error("[RecalcBreakdown] Error:", e);
-    alert("⚠️ Error: "+e.message);
-    btn.textContent="⚠️ Error";
+    btn.textContent="⚠️ Error: "+e.message;
     btn.disabled=false;
   }
 };
@@ -4110,18 +4110,10 @@ function renderMultiPollaPanel(pollaData){
     const anyLive = statuses.some(x=>x==='live');
     const overallStatus = allLocked ? '🔒 Cerrado' : anyLive ? '🔴 En vivo' : '⏳ Abierto';
     const overallCls = allLocked ? 'locked' : anyLive ? 'live' : 'open';
-    // Resolve real team names and flags for knockout rounds
-    const _mpR = pollaData[0]?.results[m.id]||{};
-    const _mpH = resolveKnockoutSlot(m.home);
-    const _mpA = resolveKnockoutSlot(m.away);
-    const mpHome = (_mpR.homeTeam&&!_mpR.homeTeam.startsWith("Gan.")&&!_mpR.homeTeam.startsWith("Per.")&&!_mpR.homeTeam.includes("TBD"))?_mpR.homeTeam:(_mpH.name!==m.home?_mpH.name:m.home);
-    const mpAway = (_mpR.awayTeam&&!_mpR.awayTeam.startsWith("Gan.")&&!_mpR.awayTeam.startsWith("Per.")&&!_mpR.awayTeam.includes("TBD"))?_mpR.awayTeam:(_mpA.name!==m.away?_mpA.name:m.away);
-    const mpHf = _mpH.flag||getTeamFlag(mpHome)||m.hf;
-    const mpAf = _mpA.flag||getTeamFlag(mpAway)||m.af;
     html += `<div class="mp-match-row">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--t1)">${mpHf} ${mpHome} vs ${mpAway} ${mpAf}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--t1)">${m.hf} ${m.home} vs ${m.away} ${m.af}</div>
           <div style="font-size:11px;color:var(--t3);margin-top:1px">${m.date} · ${m.time}</div>
         </div>
         <span class="mp-status ${overallCls}">${overallStatus}</span>
@@ -4143,13 +4135,13 @@ function renderMultiPollaPanel(pollaData){
       ${s.h===s.a ? `<div id="mp-winner-sel-${m.id}" style="background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:8px 10px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏆 Empate — ¿Quién ganó en prórroga/penales?</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="obtn${s.winner===mpHome?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${mpHome.replace(/'/g,"'")}',this)">${mpHome}</button>
-          <button class="obtn${s.winner===mpAway?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${mpAway.replace(/'/g,"'")}',this)">${mpAway}</button>
+          <button class="obtn${s.winner===m.home?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.home.replace(/'/g,"'")}',this)">${m.home}</button>
+          <button class="obtn${s.winner===m.away?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.away.replace(/'/g,"'")}',this)">${m.away}</button>
         </div>
       </div>` : ''}
-      <div class="mp-extra-q">${m.q.replace(/__HOME__/g,mpHome).replace(/__AWAY__/g,mpAway)}</div>
+      <div class="mp-extra-q">${m.q.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away)}</div>
       <div class="mp-extra-opts" id="mp-opts-${m.id}" style="margin-top:4px;margin-bottom:8px">
-        ${m.opts.map(o=>{const ol=o.replace(/__HOME__/g,mpHome).replace(/__AWAY__/g,mpAway);return`<button class="obtn${s.extra===ol?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${ol.replace(/'/g,"'")}',this)">${ol}</button>`;}).join('')}
+        ${m.opts.map(o=>{const ol=o.replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away);return`<button class="obtn${s.extra===ol?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectExtraShared(${m.id},'${ol.replace(/'/g,"'")}',this)">${ol}</button>`;}).join('')}
       </div>
       <div style="background:var(--bg);border-radius:var(--rs);padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--t2)">
         Se aplica a: <strong>${pollaNames.join(' · ')}</strong>
@@ -4162,8 +4154,8 @@ function renderMultiPollaPanel(pollaData){
       <div id="mp-winner-sel-${m.id}" style="background:rgba(255,160,0,.1);border:1px solid rgba(255,160,0,.4);border-radius:8px;padding:8px 10px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏆 Partido cerrado en empate — ¿Quién ganó en prórroga/penales?</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-          <button class="obtn${s.winner===mpHome?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${mpHome.replace(/'/g,"'")}',this)">${mpHome}</button>
-          <button class="obtn${s.winner===mpAway?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${mpAway.replace(/'/g,"'")}',this)">${mpAway}</button>
+          <button class="obtn${s.winner===m.home?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.home.replace(/'/g,"'")}',this)">${m.home}</button>
+          <button class="obtn${s.winner===m.away?' sel':''}" style="font-size:11px;padding:5px 10px" onclick="mpSelectWinnerShared(${m.id},'${m.away.replace(/'/g,"'")}',this)">${m.away}</button>
         </div>
         <button class="mp-act-btn" style="width:100%;background:var(--gd);color:#fff;padding:8px" onclick="mpSaveWinnerOnly(${m.id},window._mpPollaData,this)">💾 Guardar ganador (no toca puntos)</button>
       </div>
@@ -4413,25 +4405,9 @@ window.adminRecalcNew = async function(btn){
     const snapshot=snapshotSnap.exists()?snapshotSnap.val():null;
     if(!snapshot){ btn.textContent="⚠️ Guarda el snapshot primero"; btn.disabled=false; return; }
     const newMatches=MATCHES.filter(m=>m.id>=NEW_SYSTEM_FROM_MATCH&&results[m.id]?.locked&&results[m.id]?.qr);
-    // Build resolved picks INCLUDING random for correct "resultado único" check
-    const resolvedPicksRN={};
-    newMatches.forEach(match=>{
-      const pickMap={};
-      Object.entries(members).forEach(([uid,mem])=>{
-        let p=mem.picks?.[match.id];
-        if(!p||p.h==null){
-          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
-        } else if(p.extra){
-          p={...p,extra:p.extra.replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||"")};
-        }
-        pickMap[uid]=p;
-      });
-      resolvedPicksRN[match.id]=pickMap;
-    });
     const allPicksPerMatch={};
     newMatches.forEach(match=>{
-      allPicksPerMatch[match.id]=Object.values(resolvedPicksRN[match.id]);
+      allPicksPerMatch[match.id]=Object.values(members).map(mem=>mem.picks?.[match.id]).filter(p=>p&&p.h!=null);
     });
     const updates={};
     Object.entries(members).forEach(([uid,mem])=>{
@@ -4442,11 +4418,14 @@ window.adminRecalcNew = async function(btn){
       newMatches.forEach(match=>{
         const res=results[match.id];
         const rp=PTS_NEW[match.r]||PTS_NEW.g;
-        const p=resolvedPicksRN[match.id][uid];
+        let p=mem.picks?.[match.id];
+        if(!p||p.h==null){
+          const seed=(uid+String(match.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+          p={h:seed%4,a:(seed*7+3)%4,extra:(match.opts[(seed*13)%match.opts.length]||"").replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""),isRandom:true};
+        }
         const rh3=(res.h90!=null)?res.h90:res.h;
         const ra3=(res.a90!=null)?res.a90:res.a;
-        const resolvedQrRN=(res.qr||null)?(res.qr).replace(/__HOME__/g,match.home||"").replace(/__AWAY__/g,match.away||""):null;
-        const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,resolvedQrRN,rp,true,allPicksPerMatch[match.id]);
+        const {pts,ok,ex,qOk}=calcMatchPts(p,rh3,ra3,res.qr,rp,true,allPicksPerMatch[match.id]);
         totalPts+=pts; totalOk+=ok; totalEx+=ex;
         ptsPerMatch[match.id]=pts; okPerMatch[match.id]=ok;
         exPerMatch[match.id]=ex; qPtsPerMatch[match.id]=qOk;
