@@ -1412,9 +1412,16 @@ function renderTodayBar(){
     const cls=isDone?"finished":isLive?"live":hasPick?"done":"pending";
     const stLabel=isDone?"Terminado":isLive?"🔴 En vivo":hasPick?"✓ Pronóstico listo":"Sin pronóstico";
     const tLabel=isLive?(r.min?r.min+"'":"Live"):m.time;
+    const _tbH=m.ph!=="Grupos"?resolveKnockoutSlot(m.home):{name:m.home,flag:m.hf};
+    const _tbA=m.ph!=="Grupos"?resolveKnockoutSlot(m.away):{name:m.away,flag:m.af};
+    const _tbR=pollaLive.results?.[m.id];
+    const tbHome=(_tbR?.homeTeam&&!_tbR.homeTeam.startsWith("Gan.")&&!_tbR.homeTeam.startsWith("Per.")&&!_tbR.homeTeam.includes("TBD"))?_tbR.homeTeam:(_tbH.name!==m.home?_tbH.name:m.home);
+    const tbAway=(_tbR?.awayTeam&&!_tbR.awayTeam.startsWith("Gan.")&&!_tbR.awayTeam.startsWith("Per.")&&!_tbR.awayTeam.includes("TBD"))?_tbR.awayTeam:(_tbA.name!==m.away?_tbA.name:m.away);
+    const tbHf=_tbH.flag||getTeamFlag(tbHome)||m.hf;
+    const tbAf=_tbA.flag||getTeamFlag(tbAway)||m.af;
     return`<div class="tpill ${cls}" onclick="scrollToMatch(${m.id})">
       <div class="tdot ${cls}"></div>
-      <div class="pteams">${m.hf} ${(()=>{const r=pollaLive.results?.[m.id];return(m.ph!=="Grupos"&&r?.homeTeam&&!r.homeTeam.includes("TBD"))?r.homeTeam:m.home;})() } vs ${(()=>{const r=pollaLive.results?.[m.id];return(m.ph!=="Grupos"&&r?.awayTeam&&!r.awayTeam.includes("TBD"))?r.awayTeam:m.away;})() } ${m.af}</div>
+      <div class="pteams">${tbHf} ${tbHome} vs ${tbAway} ${tbAf}</div>
       <div class="ptime">${tLabel}</div>
       <div class="pst ${isDone?"finished":isLive?"live":hasPick?"done":"pending"}">${stLabel}</div>
     </div>`;
