@@ -1572,10 +1572,12 @@ function buildCard(m,result){
   const myPicks=pollaLive.members?.[CUR.uid]?.picks||{};
   // Use real team names from API for knockout rounds
   const r0=pollaLive.results?.[m.id];
-  const homeDisplay = (m.ph!=="Grupos"&&r0?.homeTeam&&!r0.homeTeam.includes("TBD")) ? r0.homeTeam : (m.ph!=="Grupos" ? resolveKnockoutSlot(m.home).name : m.home);
-  const awayDisplay = (m.ph!=="Grupos"&&r0?.awayTeam&&!r0.awayTeam.includes("TBD")) ? r0.awayTeam : (m.ph!=="Grupos" ? resolveKnockoutSlot(m.away).name : m.away);
-  const homeFlagR = m.ph!=="Grupos" ? (resolveKnockoutSlot(m.home).flag||m.hf) : m.hf;
-  const awayFlagR = m.ph!=="Grupos" ? (resolveKnockoutSlot(m.away).flag||m.af) : m.af;
+  const _bdH = m.ph!=="Grupos" ? resolveKnockoutSlot(m.home) : {name:m.home,flag:m.hf};
+  const _bdA = m.ph!=="Grupos" ? resolveKnockoutSlot(m.away) : {name:m.away,flag:m.af};
+  const homeDisplay = (r0?.homeTeam&&!r0.homeTeam.startsWith("Gan.")&&!r0.homeTeam.startsWith("Per.")&&!r0.homeTeam.includes("TBD"))?r0.homeTeam:(_bdH.name!==m.home?_bdH.name:m.home);
+  const awayDisplay = (r0?.awayTeam&&!r0.awayTeam.startsWith("Gan.")&&!r0.awayTeam.startsWith("Per.")&&!r0.awayTeam.includes("TBD"))?r0.awayTeam:(_bdA.name!==m.away?_bdA.name:m.away);
+  const homeFlagR = _bdH.flag||getTeamFlag(homeDisplay)||m.hf;
+  const awayFlagR = _bdA.flag||getTeamFlag(awayDisplay)||m.af;
   const myPick=myPicks[m.id]||{h:0,a:0,extra:null};
   if(!localScores[m.id]) localScores[m.id]={h:myPick.h||0,a:myPick.a||0};
   const sh=localScores[m.id].h, sa=localScores[m.id].a;
