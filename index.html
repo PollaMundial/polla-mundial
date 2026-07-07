@@ -3239,8 +3239,19 @@ function matchFixtureESPN(homeName, awayName){
   const ah = normalizeForESPN(homeName);
   const aa = normalizeForESPN(awayName);
   const found = MATCHES.find(m => {
-    const mh = normalizeForESPN(m.home);
-    const ma = normalizeForESPN(m.away);
+    // For knockout matches, resolve Gan.PXX slots to real team names before comparing
+    let mHomeRaw = m.home;
+    let mAwayRaw = m.away;
+    if(m.home.startsWith("Gan.")||m.home.startsWith("Per.")){
+      const resolved = resolveKnockoutSlot(m.home);
+      if(resolved.name !== m.home) mHomeRaw = resolved.name;
+    }
+    if(m.away.startsWith("Gan.")||m.away.startsWith("Per.")){
+      const resolved = resolveKnockoutSlot(m.away);
+      if(resolved.name !== m.away) mAwayRaw = resolved.name;
+    }
+    const mh = normalizeForESPN(mHomeRaw);
+    const ma = normalizeForESPN(mAwayRaw);
     const shareWord = (a,b) => {
       const wa = a.split(" ").filter(w=>w.length>2);
       const wb = b.split(" ").filter(w=>w.length>2);
