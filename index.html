@@ -2637,34 +2637,21 @@ function getTeamFlag(teamName){
 }
 
 function buildScorers(){
-  const liveList = pollaLive.scorerList;
+  // Always use MANUAL_SCORERS directly — static top 10 as of July 7, 2026
   const el = document.getElementById("ms-goleadores");
   if(!el) return;
-  if(liveList && liveList.length){
-    el.innerHTML=`<div class="card">
-      <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores</div>
-      ${liveList.filter(s=>s.g>0).slice(0,10).map((s,i)=>`
-        <div class="scorer-row">
-          <div class="scorer-rank${i<3?" top":""}">${i+1}</div>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:700;color:var(--t1)">${s.f||getTeamFlag(s.t)} ${s.n}</div>
-            <div style="font-size:11px;color:var(--t3)">${s.t}</div>
-          </div>
-          <div class="scorer-goals">${s.g}</div>
-        </div>`).join("")}
-      ${liveList.every(s=>s.g===0)?'<div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">Aún no hay goles en el torneo</div>':''}
-    </div>`;
-  } else {
-    el.innerHTML=`<div class="card">
-      <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores</div>
-      ${TOP_SCORERS.slice(0,15).map((s,i)=>`
-        <div class="scorer-row">
-          <div class="scorer-rank">${i+1}</div>
-          <div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--t1)">${s}</div></div>
-          <div class="scorer-goals">0</div>
-        </div>`).join("")}
-    </div>`;
-  }
+  el.innerHTML=`<div class="card">
+    <div class="rtitle" style="margin-bottom:10px">Tabla de goleadores</div>
+    ${MANUAL_SCORERS.map((s,i)=>`
+      <div class="scorer-row">
+        <div class="scorer-rank${i<3?" top":""}">${i+1}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--t1)">${s.f||getTeamFlag(s.t)} ${s.n}</div>
+          <div style="font-size:11px;color:var(--t3)">${s.t}</div>
+        </div>
+        <div class="scorer-goals">${s.g}</div>
+      </div>`).join("")}
+  </div>`;
 }
 
 // ── ADMIN ──
@@ -3657,9 +3644,8 @@ function normName(s){ return s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCa
 
 // Seed known scorers — always write manual list to Firebase as baseline
 async function seedScorers(){
-  // Always use manual list — reliable source of truth
-  await update(ref(db,`pollas/${CUR.pollaId}`),{scorerList: [...MANUAL_SCORERS].sort((a,b)=>b.g-a.g)});
-  console.log("[Scorers] seeded:", MANUAL_SCORERS.length, "scorers");
+  // DISABLED — renderScorers reads MANUAL_SCORERS directly, no Firebase needed
+  console.log("[Scorers] static list active, no seeding needed");
 }
 
 
@@ -3830,7 +3816,7 @@ function smartApiSync(){
   // Scorers only once per hour
   const lastScorers = parseInt(localStorage.getItem("p26_last_scorers")||"0");
   if(Date.now() - lastScorers > 60*60*1000){
-    fetchScorers();
+    // fetchScorers disabled — using static MANUAL_SCORERS
     localStorage.setItem("p26_last_scorers", Date.now());
   }
   // Knockout bracket: update team names once per hour after Jun 28
