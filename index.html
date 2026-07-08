@@ -3638,58 +3638,18 @@ window.adminRecalcMatch = async function(btn){
     btn.disabled = false;
   }
 };
-// Manual scorer list — source of truth until ESPN takes over
+// Manual scorer list — STATIC Top 10 as of July 7, 2026 (Octavos de final complete)
 const MANUAL_SCORERS = [
-    {n:"Lionel Messi",         t:"Argentina",              f:"🇦🇷", g:5},
-    {n:"Kylian Mbappé",        t:"France",                 f:"🇫🇷", g:4},
-    {n:"Erling Haaland",       t:"Norway",                 f:"🇳🇴", g:4},
-    {n:"Jonathan David",       t:"Canada",                 f:"🇨🇦", g:3},
-    {n:"Deniz Undav",          t:"Germany",                f:"🇩🇪", g:3},
-    {n:"Harry Kane",           t:"England",                f:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", g:2},
-    {n:"Cyle Larin",           t:"Canada",                 f:"🇨🇦", g:2},
-    {n:"Mikel Oyarzabal",      t:"Spain",                  f:"🇪🇸", g:2},
-    {n:"Ismaila Sarr",         t:"Senegal",                f:"🇸🇳", g:2},
-    {n:"Kai Havertz",          t:"Germany",                f:"🇩🇪", g:2},
-    {n:"Julián Quiñones",      t:"Mexico",                 f:"🇲🇽", g:1},
-    {n:"Raúl Jiménez",         t:"Mexico",                 f:"🇲🇽", g:1},
-    {n:"Ladislav Krejčí",      t:"Czechia",                f:"🇨🇿", g:1},
-    {n:"Hwang In-Beom",        t:"South Korea",            f:"🇰🇷", g:1},
-    {n:"Oh Hyeon-Gyu",         t:"South Korea",            f:"🇰🇷", g:1},
-    {n:"Jovo Lukić",           t:"Bosnia and Herzegovina", f:"🇧🇦", g:1},
-    {n:"Maurício",             t:"Paraguay",               f:"🇵🇾", g:1},
-    {n:"Giovanni Reyna",       t:"United States",          f:"🇺🇸", g:1},
-    {n:"Folarin Balogun",      t:"United States",          f:"🇺🇸", g:2},
-    {n:"Breel Embolo",         t:"Switzerland",            f:"🇨🇭", g:1},
-    {n:"Boualem Khoukhi",      t:"Qatar",                  f:"🇶🇦", g:1},
-    {n:"Ismael Saibari",       t:"Morocco",                f:"🇲🇦", g:1},
-    {n:"John McGinn",          t:"Scotland",               f:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", g:1},
-    {n:"Vinícius Júnior",      t:"Brazil",                 f:"🇧🇷", g:1},
-    {n:"Connor Metcalfe",      t:"Australia",              f:"🇦🇺", g:1},
-    {n:"Nestory Irankunda",    t:"Australia",              f:"🇦🇺", g:1},
-    {n:"Felix Nmecha",         t:"Germany",                f:"🇩🇪", g:1},
-    {n:"Jamal Musiala",        t:"Germany",                f:"🇩🇪", g:1},
-    {n:"Nathaniel Brown",      t:"Germany",                f:"🇩🇪", g:1},
-    {n:"Livano Comenencia",    t:"Curacao",                f:"🇨🇼", g:1},
-    {n:"Virgil van Dijk",      t:"Netherlands",            f:"🇳🇱", g:1},
-    {n:"Crysencio Summerville",t:"Netherlands",            f:"🇳🇱", g:1},
-    {n:"Keito Nakamura",       t:"Japan",                  f:"🇯🇵", g:1},
-    {n:"Daichi Kamada",        t:"Japan",                  f:"🇯🇵", g:1},
-    {n:"Amad Diallo",          t:"Ivory Coast",            f:"🇨🇮", g:1},
-    {n:"Omar Rekik",           t:"Tunisia",                f:"🇹🇳", g:1},
-    {n:"Mattias Svanberg",     t:"Sweden",                 f:"🇸🇪", g:1},
-    {n:"Alexander Isak",       t:"Sweden",                 f:"🇸🇪", g:1},
-    {n:"Viktor Gyökeres",      t:"Sweden",                 f:"🇸🇪", g:1},
-    {n:"Yasin Ayari",          t:"Sweden",                 f:"🇸🇪", g:2},
-    {n:"Elijah Just",          t:"New Zealand",            f:"🇳🇿", g:2},
-    {n:"Emam Ashour",          t:"Egypt",                  f:"🇪🇬", g:1},
-    {n:"Mohammad Mohebbi",     t:"Iran",                   f:"🇮🇷", g:1},
-    {n:"Ramin Rezaeian",       t:"Iran",                   f:"🇮🇷", g:1},
-    {n:"Maxi Araújo",          t:"Uruguay",                f:"🇺🇾", g:1},
-    {n:"Abdulelah Al-Amri",    t:"Saudi Arabia",           f:"🇸🇦", g:1},
-    {n:"Bradley Barcola",      t:"France",                 f:"🇫🇷", g:1},
-    {n:"Ibrahim Mbaye",        t:"Senegal",                f:"🇸🇳", g:1},
-    {n:"Leo Oestigaard",       t:"Norway",                 f:"🇳🇴", g:1},
-    {n:"Aymen Hussein",        t:"Iraq",                   f:"🇮🇶", g:1},
+    {n:"Lionel Messi",         t:"Argentina",              f:"🇦🇷", g:8},
+    {n:"Erling Haaland",       t:"Norway",                 f:"🇳🇴", g:7},
+    {n:"Kylian Mbappé",        t:"France",                 f:"🇫🇷", g:7},
+    {n:"Harry Kane",           t:"England",                f:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", g:6},
+    {n:"Ismaila Sarr",         t:"Senegal",                f:"🇸🇳", g:4},
+    {n:"Jude Bellingham",      t:"England",                f:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", g:4},
+    {n:"Julián Quiñones",      t:"Mexico",                 f:"🇲🇽", g:4},
+    {n:"Mikel Oyarzabal",      t:"Spain",                  f:"🇪🇸", g:4},
+    {n:"Ousmane Dembélé",      t:"France",                 f:"🇫🇷", g:4},
+    {n:"Vinícius Júnior",      t:"Brazil",                 f:"🇧🇷", g:4},
 ];
 
 // Normalize name for deduplication — removes accents, lowercase
@@ -3704,6 +3664,8 @@ async function seedScorers(){
 
 
 async function fetchScorers(){
+  // DISABLED — using static MANUAL_SCORERS as of July 7, 2026
+  return;
   try{
     // Use football-data.org scorers endpoint via Vercel proxy (no CORS)
     const res = await fetch('/api/scorers');
