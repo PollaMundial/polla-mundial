@@ -686,6 +686,20 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t1)}
         <div style="font-size:12px;color:var(--t2);margin-bottom:6px;margin-top:8px">Suma directamente desde el desglose guardado. Corrige el total sin recalcular nada.</div>
         <button class="sbtn full" style="background:#1a56db" onclick="adminRecalcTotalsFromBreakdown(this)">🔢 Recalcular totales desde desglose</button>
       </div>
+      <div class="slbl">🏆 Campeón y Goleador del Mundial</div>
+      <div class="card">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">Ingresa el campeón y goleador oficial para calcular los puntos de predicciones globales. Solo hacerlo una vez al final del torneo.</div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:12px;font-weight:600;color:var(--t1);margin-bottom:4px">🏆 Campeón</div>
+          <select id="admin-campeon-sel" style="width:100%;padding:8px;border:1px solid var(--bor);border-radius:8px;background:var(--card);color:var(--t1);font-size:13px"></select>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--t1);margin-bottom:4px">👟 Goleador</div>
+          <select id="admin-goleador-sel" style="width:100%;padding:8px;border:1px solid var(--bor);border-radius:8px;background:var(--card);color:var(--t1);font-size:13px"></select>
+        </div>
+        <button class="sbtn full" style="background:var(--gd)" onclick="adminAwardGlobalPts(this)">✅ Calcular y otorgar puntos globales</button>
+        <div id="admin-global-status" style="font-size:12px;color:var(--t2);margin-top:8px;text-align:center"></div>
+      </div>
       <div class="slbl">Eliminar polla</div>
       <div class="card">
         <button class="sbtn full" style="background:var(--rd);margin-top:0" onclick="openDelPolla()">🗑️ Eliminar esta polla</button>
@@ -1369,7 +1383,7 @@ window.showTab = function(n,el){
   document.getElementById("tc-"+n)?.classList.add("active");
   if(el) el.classList.add("active");
   if(n==="tabla") renderLB();
-  if(n==="admin") buildAdmin();
+  if(n==="admin"){ buildAdmin(); buildAdminGlobalPanel(); }
   if(n==="mispicks") renderMyPicks();
   if(n==="global") buildGlobal();
   if(n==="reglas"){ const el=document.getElementById("reglas-code-val"); if(el) el.textContent=CUR.pollaId||"———"; }
@@ -1869,6 +1883,13 @@ function renderMyPicks(){
     const r=results[m.id];
     const isNew = m.id >= NEW_SYSTEM_FROM_MATCH;
     const rp = isNew ? (PTS_NEW[m.r]||PTS_NEW.g) : (PTS[m.r]||PTS_DEF.g);
+    // Resolve real team names and flags for knockout rounds
+    const _rpH=m.ph!=="Grupos"?resolveKnockoutSlot(m.home):{name:m.home,flag:m.hf};
+    const _rpA=m.ph!=="Grupos"?resolveKnockoutSlot(m.away):{name:m.away,flag:m.af};
+    const rpHome=(r?.homeTeam&&!r.homeTeam.startsWith("Gan.")&&!r.homeTeam.startsWith("Per.")&&!r.homeTeam.includes("TBD"))?r.homeTeam:(_rpH.name!==m.home?_rpH.name:m.home);
+    const rpAway=(r?.awayTeam&&!r.awayTeam.startsWith("Gan.")&&!r.awayTeam.startsWith("Per.")&&!r.awayTeam.includes("TBD"))?r.awayTeam:(_rpA.name!==m.away?_rpA.name:m.away);
+    const rpHf=_rpH.flag||getTeamFlag(rpHome)||m.hf;
+    const rpAf=_rpA.flag||getTeamFlag(rpAway)||m.af;
     const members=pollaLive.members||{};
     // Build all resolved picks (including random) for resultado único check
     const resolvedPicksMap = {};
@@ -1876,7 +1897,7 @@ function renderMyPicks(){
       let p=mem.picks?.[m.id];
       if(!p||p.h==null){
         const seed=(uid+String(m.id)).split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away),isRandom:true};
+        p={h:seed%4,a:(seed*7+3)%4,extra:(m.opts[(seed*13)%m.opts.length]||"").replace(/__HOME__/g,rpHome).replace(/__AWAY__/g,rpAway),isRandom:true};
       }
       resolvedPicksMap[uid]=p;
     });
@@ -1919,14 +1940,14 @@ function renderMyPicks(){
     return`<div class="pick-card" onclick="this.querySelector('.pick-body').classList.toggle('open')">
       <div class="pick-hdr">
         <div style="flex:1;min-width:0">
-          <div class="pick-teams">${m.hf} ${m.home} ${r.h}–${r.a} ${m.away} ${m.af}</div>
+          <div class="pick-teams">${rpHf} ${rpHome} ${r.h90!=null?r.h90:r.h}–${r.a90!=null?r.a90:r.a} ${rpAway} ${rpAf}</div>
           <div style="margin-top:6px">
             <span style="background:${resultBg};border:0.5px solid ${resultBorder};color:${resultColor};font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px">${resultLabel} · ${myScore}</span>
           </div>
-          <div class="pick-date" style="color:var(--t3);margin-top:6px">${m.q}</div>
+          <div class="pick-date" style="color:var(--t3);margin-top:6px">${m.q.replace(/__HOME__/g,rpHome).replace(/__AWAY__/g,rpAway)}</div>
           <div class="pick-date" style="margin-top:2px">
             Tu resp: <span style="color:${myQOk?"#16a34a":"var(--t2)"};font-weight:${myQOk?"600":"400"}">${myExtra}</span>
-            · Correcta: <span style="color:#16a34a;font-weight:600">${r.qr?(r.qr).replace(/__HOME__/g,m.home).replace(/__AWAY__/g,m.away):"pendiente"}</span>
+            · Correcta: <span style="color:#16a34a;font-weight:600">${r.qr?(r.qr).replace(/__HOME__/g,rpHome).replace(/__AWAY__/g,rpAway):"pendiente"}</span>
           </div>
         </div>
         <div class="pick-pts ${ptsCls}">+${myPts}pts</div>
@@ -2149,9 +2170,18 @@ function buildCruces(){
     if(mGan){
       const mid=parseInt(mGan[1]),r=results[mid];
       if(r?.locked&&r.h!=null&&r.a!=null){
-        // Si hay empate con ganador manual (prórroga/penales), usar ese
-        const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null);
-        if(winner)return{name:winner,flag:getTeamFlag(winner)||"🏳️"};
+        const resolveRawB=(raw)=>{
+          if(!raw)return null;
+          if(raw.startsWith("Gan.")||raw.startsWith("Per.")){
+            const rec=resolveSlot(raw);
+            return rec.name!==raw?rec.name:null;
+          }
+          return raw;
+        };
+        const hName=resolveRawB(r.homeTeam)||r.homeTeam;
+        const aName=resolveRawB(r.awayTeam)||r.awayTeam;
+        const winner=r.winner?resolveRawB(r.winner)||r.winner:(r.h>r.a?hName:r.a>r.h?aName:null);
+        if(winner&&!winner.startsWith("Gan.")&&!winner.startsWith("Per."))return{name:winner,flag:getTeamFlag(winner)||"🏳️"};
       }
       return{name:slot,flag:"🏳️"};
     }
@@ -2159,10 +2189,19 @@ function buildCruces(){
     if(mPer){
       const mid=parseInt(mPer[1]),r=results[mid];
       if(r?.locked&&r.h!=null&&r.a!=null){
-        // El perdedor es el que no es el winner
-        const winner=r.winner||(r.h>r.a?r.homeTeam:r.a>r.h?r.awayTeam:null);
-        const loser=winner?(winner===r.homeTeam?r.awayTeam:r.homeTeam):null;
-        if(loser)return{name:loser,flag:getTeamFlag(loser)||"🏳️"};
+        const resolveRawB=(raw)=>{
+          if(!raw)return null;
+          if(raw.startsWith("Gan.")||raw.startsWith("Per.")){
+            const rec=resolveSlot(raw);
+            return rec.name!==raw?rec.name:null;
+          }
+          return raw;
+        };
+        const hName=resolveRawB(r.homeTeam)||r.homeTeam;
+        const aName=resolveRawB(r.awayTeam)||r.awayTeam;
+        const winner=r.winner?resolveRawB(r.winner)||r.winner:(r.h>r.a?hName:r.a>r.h?aName:null);
+        const loser=winner?(winner===hName?aName:hName):null;
+        if(loser&&!loser.startsWith("Gan.")&&!loser.startsWith("Per."))return{name:loser,flag:getTeamFlag(loser)||"🏳️"};
       }
       return{name:slot,flag:"🏳️"};
     }
@@ -3763,6 +3802,83 @@ function matchFixtureByDate(fix){
   });
   return byDate?.id||null;
 }
+
+// ── MANUAL GLOBAL POINTS PANEL ──
+function buildAdminGlobalPanel(){
+  // Populate champion selector with all WC teams
+  const campSel = document.getElementById("admin-campeon-sel");
+  const goSel = document.getElementById("admin-goleador-sel");
+  if(!campSel || !goSel) return;
+  // Check if already awarded
+  const official = pollaLive.officialResults||{};
+  const statusEl = document.getElementById("admin-global-status");
+  if(official.champion){
+    if(statusEl) statusEl.textContent = `✅ Ya otorgados: Campeón=${official.champion}, Goleador=${official.topScorer||"—"}`;
+  }
+  // Teams from all groups
+  const teams = Object.values(GROUPS).flatMap(g=>g.teams.map(t=>t.n)).sort();
+  campSel.innerHTML = '<option value="">— Selecciona el campeón —</option>' +
+    teams.map(t=>`<option value="${t}"${official.champion===t?' selected':''}>${t}</option>`).join('');
+  // Scorers from MANUAL_SCORERS
+  goSel.innerHTML = '<option value="">— Selecciona el goleador —</option>' +
+    MANUAL_SCORERS.map(s=>`<option value="${s.n}"${official.topScorer===s.n?' selected':''}>${s.n} (${s.t}) - ${s.g} goles</option>`).join('');
+}
+
+window.adminAwardGlobalPts = async function(btn){
+  const campSel = document.getElementById("admin-campeon-sel");
+  const goSel = document.getElementById("admin-goleador-sel");
+  const statusEl = document.getElementById("admin-global-status");
+  const champion = campSel?.value;
+  const topScorer = goSel?.value;
+  if(!champion){ alert("Selecciona el campeón primero."); return; }
+  if(!topScorer){ alert("Selecciona el goleador primero."); return; }
+  const official = pollaLive.officialResults||{};
+  if(official.globalPtsAwarded){
+    if(!confirm("Los puntos globales ya fueron otorgados antes.\n¿Quieres volver a calcularlos? (Se resetearán los puntos globales anteriores)")) return;
+  } else {
+    if(!confirm(`¿Otorgar puntos globales?\n\n🏆 Campeón: ${champion}\n👟 Goleador: ${topScorer}\n\nCampeón correcto: +10pts\nGoleador correcto: +5pts\n\n⚠️ Solo hacer esto una vez al final del torneo.`)) return;
+  }
+  btn.textContent = "⏳ Calculando..."; btn.disabled = true;
+  try{
+    const GLOBAL_PTS = {campeon:10, goleador:5};
+    const members = pollaLive.members||{};
+    const updates = {};
+    const log = [];
+    Object.entries(members).forEach(([uid,mem])=>{
+      const g = mem.globals||{};
+      let pts = 0;
+      // Reset previous global pts if re-running
+      if(official.globalPtsAwarded && mem.globalPtsAwarded){
+        // Will subtract old globalPts below
+      }
+      const oldGlobalPts = mem.globalPtsAwarded ? (mem.globalPts||0) : 0;
+      // Check champion — normalize for comparison
+      const normA=(s)=>s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z]/g," ").trim();
+      if(g.campeon && normA(g.campeon).split(" ").some(w=>w.length>2&&normA(champion).includes(w))) pts += GLOBAL_PTS.campeon;
+      // Check top scorer — last name match
+      if(g.goleador && normA(g.goleador).split(" ").some(w=>w.length>2&&normA(topScorer).includes(w))) pts += GLOBAL_PTS.goleador;
+      const currentPts = (mem.pts||0) - oldGlobalPts; // pts without old global
+      updates[`pollas/${CUR.pollaId}/members/${uid}/pts`] = currentPts + pts;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/globalPts`] = pts;
+      updates[`pollas/${CUR.pollaId}/members/${uid}/globalPtsAwarded`] = true;
+      if(pts>0) log.push(`${mem.dname||uid}: +${pts}pts`);
+    });
+    // Save official results
+    updates[`pollas/${CUR.pollaId}/officialResults/champion`] = champion;
+    updates[`pollas/${CUR.pollaId}/officialResults/topScorer`] = topScorer;
+    updates[`pollas/${CUR.pollaId}/officialResults/globalPtsAwarded`] = true;
+    updates[`pollas/${CUR.pollaId}/officialResults/calculatedAt`] = Date.now();
+    await update(ref(db,"/"), updates);
+    console.log("[GlobalPts] Awarded:", log.join(", "));
+    btn.textContent = "✅ Puntos otorgados";
+    if(statusEl) statusEl.textContent = `✅ ${log.length} usuarios recibieron puntos. ${log.join(", ")}`;
+    setTimeout(()=>{ btn.textContent="✅ Calcular y otorgar puntos globales"; btn.disabled=false; }, 3000);
+  }catch(e){
+    alert("Error: "+e.message);
+    btn.textContent="✅ Calcular y otorgar puntos globales";
+    btn.disabled=false;
+  }
+};
 
 // ── AUTO GLOBAL POINTS: calculate at tournament end ──
 async function fetchTournamentResults(){
